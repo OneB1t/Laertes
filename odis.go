@@ -131,6 +131,7 @@ type odisStarter struct {
 	project    func() string // the last vehicle project used, for when the car cannot be identified
 	vin        func() string // the simulation VIN for offline mode (nil or "" keeps the VCI default)
 	wake       func() wakeConfig // the clamp 15 wake-up frame (nil: none)
+	qemu       func() qemuConfig // the virtual VCI's connection to a QEMU gateway (nil: simulate)
 	product    func() string     // the chosen ODIS product ("OE"/"OS"); applied before each start
 
 	mu       sync.Mutex
@@ -252,6 +253,12 @@ func (o *odisStarter) run(project string, offline bool) error {
 				return err
 			}
 			conf := offlineConfig{Wake: o.wakeFrame()}
+			if o.qemu != nil {
+				conf.QEMU = o.qemu()
+			}
+			if conf.QEMU.On {
+				log.Printf("virtual VCI: connected to the QEMU gateway at %s, CAN%d", conf.QEMU.Addr, conf.QEMU.Bus)
+			}
 			if conf.Wake.On {
 				setIgnition(true) // a session with the wake-up starts with the ignition on
 			}

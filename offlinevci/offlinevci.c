@@ -24,8 +24,16 @@
 // on the simulated device it only appears in the trace (kind W). It is sent only while the file
 // wake.on exists next to this DLL: Laertes's Ignition button creates and deletes it.
 //
+// QEMU gateway: when offline.conf names an emulator (qemu=host:port, e.g. the MQB gateway firmware
+// running in QEMU with its TCP CAN bridge), raw CAN channels are connected to that emulator's CAN bus
+// qemu_bus= (a FlexCAN instance number; the J533's diagnostic CAN is 4) instead of the simulator:
+// ODIS's frames go to the emulated unit and its frames come back through the channel's filters, so
+// ODIS does ISO-TP and UDS with the real firmware. Bridge records (16 bytes, both directions):
+// bus, flags (bit 0: 29-bit id, bit 1: RTR), dlc, 0, id (big endian), data[8].
+//
 // Build (32-bit): offlinevci\build.cmd
 
+#include <winsock2.h>
 #include <windows.h>
 #include <stddef.h>
 #include <string.h>
@@ -47,6 +55,9 @@
 
 #define LOOPBACK    0x03
 #define TX_MSG_TYPE 0x01
+
+#define PASS_FILTER  0x01
+#define BLOCK_FILTER 0x02
 
 #define CAN_29BIT_ID 0x100
 #define CAN_ID_BOTH  0x800
@@ -83,7 +94,7 @@ static unsigned long newId(unsigned long *id) {
 
 #define MAXCH     32
 #define MAXF      8
-#define MAXQ      64
+#define MAXQ      512 // raw CAN from the QEMU gateway can arrive faster than ODIS polls
 #define MAXRESP   512
 #define MAXREQ    256
 #define MAXWRITE  64 // bytes per written DID value
@@ -107,11 +118,19 @@ typedef struct {
     unsigned long rx; // ECU response CAN ID
 } Filter;
 
+// A pass or block filter on a raw CAN channel, compared on the 4 CAN id bytes (QEMU gateway mode).
+typedef struct {
+    unsigned long type;
+    unsigned long mask, pattern;
+} RawFilter;
+
 typedef struct {
     unsigned long id;
     unsigned long proto;
     unsigned long nflt;
     Filter flt[MAXF];
+    unsigned long nraw;
+    RawFilter raw[MAXF];
     IsoTp tp;
     int loopback;
 } Channel;
@@ -761,9 +780,22 @@ static int hexVal(char c) {
     return -1;
 }
 
+static char qemuAddr[64];         // host:port of the QEMU gateway's CAN bridge, "" = simulate
+static unsigned long qemuBus = 4; // the emulator's CAN bus ODIS is connected to
+
 static void applyConfig(const char *key, const char *value) {
     if (lstrcmpA(key, "passthru") == 0) {
         lstrcpynA(passthruPath, value, MAX_PATH);
+        return;
+    }
+
+    if (lstrcmpA(key, "qemu") == 0) {
+        lstrcpynA(qemuAddr, value, sizeof qemuAddr);
+        return;
+    }
+
+    if (lstrcmpA(key, "qemu_bus") == 0 && value[0]) {
+        qemuBus = strtoul(value, 0, 10);
         return;
     }
 
@@ -842,6 +874,8 @@ static void loadConfig(void) {
 
     passthruPath[0] = 0; // a session without these lines uses the simulated device and no wake-up
     wakeOn = 0;
+    qemuAddr[0] = 0;
+    qemuBus = 4;
 
     char *line = buf;
     while (line && *line) {
@@ -1121,7 +1155,8 @@ static void enqueueAt(const Channel *c, unsigned long canId, const unsigned char
     if (len == 0 || len > MAXRESP) return;
 
     if (qCount >= MAXQ) {
-        logStr("QFULL drop");
+        static unsigned long drops;
+        if (drops++ % 1000 == 0) logStr("QFULL drop"); // a busy QEMU bus could otherwise flood the trace
         return;
     }
 
@@ -1451,6 +1486,168 @@ static void stopWake(void) {
     logStr("WAKE stopped");
 }
 
+// --- QEMU gateway (see the top of this file) -----------------------------------------------------
+
+static SOCKET qemuSock = INVALID_SOCKET;
+static SRWLOCK qemuSendLock = SRWLOCK_INIT;
+static HANDLE qemuThread;
+static volatile LONG qemuRun;
+
+static int qemuMode(void) { return qemuAddr[0] && !real.lib; }
+
+// rawPass applies a raw CAN channel's filters (J2534: a frame passes when a pass filter matches and
+// no block filter does; without filters nothing passes). Masks compare the 4 id bytes.
+static int rawPass(const Channel *c, unsigned long canId) {
+    int pass = 0;
+    for (unsigned long i = 0; i < c->nraw; i++) {
+        if ((canId & c->raw[i].mask) != (c->raw[i].pattern & c->raw[i].mask)) continue;
+        if (c->raw[i].type == BLOCK_FILTER) return 0;
+        if (c->raw[i].type == PASS_FILTER) pass = 1;
+    }
+    return pass;
+}
+
+static void qemuSend(unsigned long canId, int ext, const unsigned char *data, unsigned long len) {
+    unsigned char r[16];
+    memset(r, 0, sizeof r);
+    if (len > 8) len = 8;
+    r[0] = (unsigned char)qemuBus;
+    r[1] = ext ? 1 : 0;
+    r[2] = (unsigned char)len;
+    r[4] = (unsigned char)(canId >> 24);
+    r[5] = (unsigned char)(canId >> 16);
+    r[6] = (unsigned char)(canId >> 8);
+    r[7] = (unsigned char)canId;
+    memcpy(r + 8, data, len);
+    AcquireSRWLockExclusive(&qemuSendLock);
+    if (qemuSock != INVALID_SOCKET) send(qemuSock, (const char *)r, 16, 0);
+    ReleaseSRWLockExclusive(&qemuSendLock);
+}
+
+// qemuDeliver hands a frame from the emulated bus to every raw CAN channel whose filters pass it.
+static void qemuDeliver(unsigned long canId, int ext, const unsigned char *data, unsigned long len) {
+    int logged = 0;
+    AcquireSRWLockExclusive(&lock);
+    for (int i = 0; i < MAXCH; i++) {
+        Channel *c = &channels[i];
+        if (!c->id || c->proto != CAN || !rawPass(c, canId)) continue;
+        if (!logged) {
+            canLog('T', c->id, canId, data, len);
+            logged = 1;
+        }
+        enqueueAt(c, canId, data, len, ext ? CAN_29BIT_ID : 0, 0);
+    }
+    ReleaseSRWLockExclusive(&lock);
+}
+
+static SOCKET qemuConnect(void) {
+    char host[64];
+    lstrcpynA(host, qemuAddr, sizeof host);
+    unsigned short port = 23040;
+    for (char *p = host; *p; p++)
+        if (*p == ':') {
+            *p = 0;
+            port = (unsigned short)strtoul(p + 1, 0, 10);
+            break;
+        }
+
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET;
+    a.sin_port = htons(port);
+    a.sin_addr.s_addr = inet_addr(host);
+    if (a.sin_addr.s_addr == INADDR_NONE) {
+        struct hostent *h = gethostbyname(host);
+        if (!h) return INVALID_SOCKET;
+        memcpy(&a.sin_addr, h->h_addr_list[0], 4);
+    }
+
+    SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) return s;
+    if (connect(s, (struct sockaddr *)&a, sizeof a) != 0) {
+        closesocket(s);
+        return INVALID_SOCKET;
+    }
+    BOOL one = TRUE;
+    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);
+    return s;
+}
+
+// qemuLoop keeps the connection to the emulator (reconnecting every second while it is down) and
+// delivers what the emulated bus carries.
+static DWORD WINAPI qemuLoop(LPVOID arg) {
+    (void)arg;
+    unsigned char buf[16];
+    unsigned long have = 0;
+    int warned = 0;
+
+    logStr("QEMU link thread started");
+    while (qemuRun) {
+        if (qemuSock == INVALID_SOCKET) {
+            SOCKET s = qemuConnect();
+            if (s == INVALID_SOCKET) {
+                if (!warned++) logStr("QEMU gateway not reachable yet: retrying every second");
+                Sleep(1000);
+                continue;
+            }
+            AcquireSRWLockExclusive(&qemuSendLock);
+            qemuSock = s;
+            ReleaseSRWLockExclusive(&qemuSendLock);
+            have = 0;
+            warned = 0;
+            char b[96];
+            wsprintfA(b, "QEMU gateway connected: %s, CAN bus %lu", qemuAddr, qemuBus);
+            logStr(b);
+        }
+
+        fd_set rd;
+        FD_ZERO(&rd);
+        FD_SET(qemuSock, &rd);
+        struct timeval tv = {0, 200000};
+        int ready = select(0, &rd, 0, 0, &tv);
+        if (ready == 0) continue;
+        int n = ready > 0 ? recv(qemuSock, (char *)buf + have, (int)(16 - have), 0) : -1;
+        if (n <= 0) {
+            logStr("QEMU gateway connection lost: reconnecting");
+            AcquireSRWLockExclusive(&qemuSendLock);
+            closesocket(qemuSock);
+            qemuSock = INVALID_SOCKET;
+            ReleaseSRWLockExclusive(&qemuSendLock);
+            Sleep(500);
+            continue;
+        }
+        have += (unsigned long)n;
+        if (have < 16) continue;
+        have = 0;
+
+        if (buf[0] != qemuBus) continue;
+        unsigned long len = buf[2] > 8 ? 8 : buf[2];
+        qemuDeliver(canId4(buf + 4), buf[1] & 1, buf + 8, len);
+    }
+    return 0;
+}
+
+static void startQemu(void) {
+    if (qemuThread) return;
+    WSADATA w;
+    WSAStartup(MAKEWORD(2, 2), &w);
+    qemuRun = 1;
+    qemuThread = CreateThread(0, 0, qemuLoop, 0, 0, 0);
+}
+
+static void stopQemu(void) {
+    if (!qemuThread) return;
+    qemuRun = 0;
+    WaitForSingleObject(qemuThread, 2000);
+    CloseHandle(qemuThread);
+    qemuThread = 0;
+    AcquireSRWLockExclusive(&qemuSendLock);
+    if (qemuSock != INVALID_SOCKET) closesocket(qemuSock);
+    qemuSock = INVALID_SOCKET;
+    ReleaseSRWLockExclusive(&qemuSendLock);
+    WSACleanup();
+}
+
 // --- J2534 entry points --------------------------------------------------------------------------
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
@@ -1486,9 +1683,18 @@ long WINAPI PassThruOpen(void *name, unsigned long *deviceId) {
         p = " passthru=";
         while (*p) b[o++] = *p++;
         for (char *s = passthruPath; *s && o < sizeof b - 1; s++) b[o++] = *s;
+    } else if (qemuAddr[0]) {
+        p = " qemu=";
+        while (*p) b[o++] = *p++;
+        for (char *s = qemuAddr; *s && o < sizeof b - 8; s++) b[o++] = *s;
+        p = " bus=";
+        while (*p) b[o++] = *p++;
+        putHexU32(b, &o, qemuBus, 1);
     }
 
     logWrite(b, o);
+
+    if (!passthruPath[0] && qemuAddr[0]) startQemu();
 
     if (passthruPath[0]) {
         if (!loadReal()) {
@@ -1503,6 +1709,7 @@ long WINAPI PassThruOpen(void *name, unsigned long *deviceId) {
 
 long WINAPI PassThruClose(unsigned long deviceId) {
     stopWake();
+    stopQemu();
     if (real.lib) return real.close(deviceId);
     return STATUS_NOERROR;
 }
@@ -1525,6 +1732,7 @@ long WINAPI PassThruConnect(unsigned long deviceId, unsigned long protocolId, un
         c->id = *channelId;
         c->proto = protocolId;
         c->nflt = 0;
+        c->nraw = 0;
         memset(&c->tp, 0, sizeof c->tp);
         c->loopback = 0;
     }
@@ -1672,6 +1880,15 @@ long WINAPI PassThruWriteMsgs(unsigned long channelId, void *msgs, unsigned long
             if (c->loopback)
                 enqueueAt(c, reqId, m[k].Data + 4, m[k].DataSize - 4, TX_MSG_TYPE, 0);
 
+            if (qemuMode()) { // the emulated gateway answers, over its CAN bus
+                if (c->proto == CAN)
+                    qemuSend(reqId, (m[k].TxFlags & CAN_29BIT_ID) || reqId > 0x7FF, m[k].Data + 4,
+                             m[k].DataSize - 4);
+                else
+                    logStr("QEMU gateway: only raw CAN channels are connected, ISO15765 message dropped");
+                continue;
+            }
+
             if (c->proto != ISO15765) {
                 handleCanFrame(c, reqId, m[k].Data + 4, m[k].DataSize - 4);
                 continue;
@@ -1744,6 +1961,19 @@ long WINAPI PassThruStartMsgFilter(unsigned long channelId, unsigned long filter
 
     canLogFilter(channelId, filterType, maskId, patId, fcId);
 
+    if ((filterType == PASS_FILTER || filterType == BLOCK_FILTER) && msk && pat &&
+        msk->DataSize >= 4 && pat->DataSize >= 4) {
+        AcquireSRWLockExclusive(&lock);
+        Channel *c = findChannel(channelId);
+        if (c && c->nraw < MAXF) {
+            c->raw[c->nraw].type = filterType;
+            c->raw[c->nraw].mask = maskId;
+            c->raw[c->nraw].pattern = patId;
+            c->nraw++;
+        }
+        ReleaseSRWLockExclusive(&lock);
+    }
+
     if (pat && fc && pat->DataSize >= 4 && fc->DataSize >= 4) {
         AcquireSRWLockExclusive(&lock);
 
@@ -1791,7 +2021,8 @@ long WINAPI PassThruReadVersion(unsigned long deviceId, char *firmware, char *dl
 long WINAPI PassThruGetLastError(char *description) {
     if (real.lib) return real.lastError(description);
     if (!description) return ERR_NULL_PARAMETER;
-    lstrcpynA(description, "Laertes offline VCI: no interface, gateway simulated", 256);
+    lstrcpynA(description, qemuAddr[0] ? "Laertes virtual VCI: connected to the QEMU gateway"
+                                       : "Laertes offline VCI: no interface, gateway simulated", 256);
     return STATUS_NOERROR;
 }
 

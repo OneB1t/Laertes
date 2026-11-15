@@ -60,6 +60,27 @@ func TestWakeFromSettings(t *testing.T) {
 	}
 }
 
+func TestQEMUFromSettings(t *testing.T) {
+	def := qemuConfig{Addr: "127.0.0.1:23040", Bus: 4}
+	if got := qemuFromSettings(nil); got != def {
+		t.Errorf("defaults = %+v", got)
+	}
+	got := qemuFromSettings([]byte(`{"qemuOn":true,"qemuAddr":" localhost:24000 ","qemuBus":0}`))
+	if want := (qemuConfig{On: true, Addr: "localhost:24000", Bus: 0}); got != want {
+		t.Errorf("qemu = %+v, want %+v", got, want)
+	}
+	// Malformed values (and anything that could add a line to offline.conf) keep the defaults.
+	got = qemuFromSettings([]byte(`{"qemuAddr":"x:1\npassthru=y","qemuBus":9}`))
+	if got != def {
+		t.Errorf("malformed = %+v", got)
+	}
+	for _, a := range []string{"host", "host:0", "host:99999", ":23040"} {
+		if got := qemuFromSettings([]byte(`{"qemuAddr":"` + a + `"}`)); got.Addr != def.Addr {
+			t.Errorf("address %q accepted", a)
+		}
+	}
+}
+
 func TestReadCANLog(t *testing.T) {
 	old := offlineCANLogPath
 	offlineCANLogPath = filepath.Join(t.TempDir(), "vci-can.log")

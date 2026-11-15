@@ -1012,7 +1012,8 @@ function laertesLink() {
 // opens Laertes). dtcCheck: read the fault memory before and after each coding/adaptation write and
 // show what changed. Loaded once at startup; defaults apply until then.
 const settings = {dtcCheck: true, hideDangerous: true, transLang: 'en', autoTranslate: false, autoStartBridge: true, odisProject: '', odisOffline: false, odisVin: '', odisDirectProject: false, odisProduct: 'OE',
-  wakeOn: false, wakeId: '3C0', wakeData: '00 00 03 00', wakeE2E: 'C3', wakeMs: 100};
+  wakeOn: false, wakeId: '3C0', wakeData: '00 00 03 00', wakeE2E: 'C3', wakeMs: 100,
+  qemuOn: false, qemuAddr: '127.0.0.1:23040', qemuBus: 4};
 async function loadSettings() {
   try { Object.assign(settings, await api('GET', '/api/settings')); } catch (e) {}
   try { geko = await api('GET', '/api/geko'); } catch (e) {}
@@ -1856,6 +1857,21 @@ function renderSettings() {
     <textarea id="simCarScan" rows="5" style="width:100%; font:12px Consolas, monospace" placeholder="VCDS Auto-Scan: from &quot;VCDS -- Windows Based VAG/VAS Emulator&quot; to &quot;End----&quot;"></textarea>
     <div class="bar"><button class="op" onclick="op('Loading the simulated car', simCarLoad)" title="Turn the scan into the virtual VCI's car (car.txt)">Simulate this car</button>
       <button onclick="op('Removing the simulated car', simCarClear)" title="Delete car.txt: every unit answers as the generic unit again">Back to the generic unit</button></div>
+    </section><section class="card"><h2 class="sub">Virtual VCI: emulated gateway (QEMU)</h2>
+    <label style="align-items:flex-start" title="The virtual VCI connects ODIS's CAN channels to the MQB gateway firmware running in QEMU (its TCP CAN bridge) instead of simulating the units">
+      <input type="checkbox" ${settings.qemuOn ? 'checked' : ''} onchange="settings.qemuOn = this.checked; saveSettings()">
+      <span>Connect the virtual VCI to the gateway emulator, so ODIS talks to the real J533 firmware.
+        <br><span class="meta">Start the emulator first (in WSL: <code>./run.sh</code> in the mqb-gateway-qemu folder); the VCI reconnects by itself while it is down.
+        Used by <b>▶ Bridge + virtual VCI</b>; takes effect the next time the bridge starts. The simulated car above is not used while this is on.</span></span>
+    </label>
+    <label style="align-items:center" title="host:port of the emulator's CAN bridge (QEMU's MQB_CAN_PORT, default 23040; WSL forwards it to localhost)">
+      <span>Emulator:</span><input type="text" maxlength="60" style="width:180px" value="${esc(settings.qemuAddr)}" onchange="settings.qemuAddr = this.value.trim(); saveSettings()">
+    </label>
+    <label style="align-items:center" title="The gateway's CAN bus ODIS is connected to, as if the VCI were plugged into it. The OBD port is the diagnostic CAN, CAN4.">
+      <span>CAN bus:</span><select onchange="settings.qemuBus = Number(this.value); saveSettings()">
+        ${['CAN0', 'CAN1 (unused)', 'CAN2', 'CAN3', 'CAN4 (diagnostics, OBD)', 'CAN5'].map((n, i) => `<option value="${i}" ${Number(settings.qemuBus) === i ? 'selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </label>
     </section><section class="card"><h2 class="sub">Clamp 15 wake-up (bench)</h2>
     <label style="align-items:flex-start" title="Laertes's VCI DLL sits between ODIS and your VCI's J2534 driver, forwards everything and sends this frame periodically on the CAN bus">
       <input type="checkbox" ${settings.wakeOn ? 'checked' : ''} onchange="settings.wakeOn = this.checked; saveSettings()">

@@ -161,13 +161,46 @@ func wakeFromSettings(raw json.RawMessage) wakeConfig {
 	return w
 }
 
+// qemuConfig connects the virtual VCI to an emulated control unit instead of the simulator: the MQB
+// gateway firmware running in QEMU with its TCP CAN bridge (offlinevci.c, "QEMU gateway"). Bus is
+// the emulator's CAN bus ODIS talks on, a FlexCAN number; the J533's diagnostic CAN is 4.
+type qemuConfig struct {
+	On   bool
+	Addr string // host:port of the bridge
+	Bus  int
+}
+
+// qemuBuses is the number of the gateway's FlexCAN buses (0-5; the firmware leaves CAN1 unused).
+const qemuBuses = 6
+
+// qemuFromSettings reads the QEMU gateway connection from the page's settings, keeping the default
+// for any value that is missing or malformed (the values end up as lines of offline.conf).
+func qemuFromSettings(raw json.RawMessage) qemuConfig {
+	q := qemuConfig{Addr: "127.0.0.1:23040", Bus: 4}
+	q.On, _ = settingValue(raw, "qemuOn").(bool)
+	if a, ok := settingValue(raw, "qemuAddr").(string); ok {
+		a = strings.TrimSpace(a)
+		host, port, found := strings.Cut(a, ":")
+		if p, err := strconv.Atoi(port); found && err == nil && p > 0 && p < 65536 && host != "" &&
+			strings.Trim(strings.ToLower(host), "0123456789abcdefghijklmnopqrstuvwxyz.-") == "" {
+			q.Addr = a
+		}
+	}
+	if b, ok := settingValue(raw, "qemuBus").(float64); ok && b >= 0 && b < qemuBuses && b == float64(int(b)) {
+		q.Bus = int(b)
+	}
+	return q
+}
+
 // offlineConfig is what offline.conf tells the VCI DLL: the simulated VIN, the wake-up frame and,
-// for pass-through, the real J2534 driver to forward to (Passthru, named PassthruName in ODIS).
+// for pass-through, the real J2534 driver to forward to (Passthru, named PassthruName in ODIS), or
+// the QEMU gateway to connect to instead of the simulator.
 type offlineConfig struct {
 	VIN          string
 	Wake         wakeConfig
 	Passthru     string
 	PassthruName string
+	QEMU         qemuConfig
 }
 
 // writeOfflineConfig writes the settings the VCI DLL reads. An empty VIN omits the line, so the VCI
@@ -179,6 +212,8 @@ func writeOfflineConfig(c offlineConfig) error {
 	}
 	if c.Passthru != "" {
 		fmt.Fprintf(&b, "passthru=%s\npassthru_name=%s\n", c.Passthru, c.PassthruName)
+	} else if q := c.QEMU; q.On {
+		fmt.Fprintf(&b, "qemu=%s\nqemu_bus=%d\n", q.Addr, q.Bus)
 	}
 	if w := c.Wake; w.On {
 		fmt.Fprintf(&b, "wake=1\nwake_id=%s\nwake_data=%s\nwake_e2e=%s\nwake_ms=%d\n", w.ID, w.Data, w.E2E, w.Ms)
@@ -276,8 +311,12 @@ func selectedVCI() string {
 	name := parseSelectedVCI(string(data))
 	if parseProperties(string(data))["vci_modulename"] == offlineVCIName {
 		conf, _ := os.ReadFile(offlineConfPath)
-		if real := parseProperties(string(conf))["passthru_name"]; real != "" {
+		p := parseProperties(string(conf))
+		if real := p["passthru_name"]; real != "" {
 			return real + " via Laertes (clamp 15 wake-up)"
+		}
+		if addr := p["qemu"]; addr != "" {
+			return "Laertes virtual VCI → QEMU gateway " + addr + ", CAN" + p["qemu_bus"]
 		}
 		return "Laertes virtual VCI"
 	}

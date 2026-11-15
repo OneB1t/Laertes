@@ -19,7 +19,7 @@ import (
 )
 
 // version of Laertes, shown in the web page's top bar.
-const version = "0.9.11"
+const version = "0.9.12"
 
 //go:embed index.html
 var indexHTML []byte
@@ -83,6 +83,9 @@ func main() {
 	}, wake: func() wakeConfig {
 		raw, _ := store.Settings()
 		return wakeFromSettings(raw)
+	}, qemu: func() qemuConfig {
+		raw, _ := store.Settings()
+		return qemuFromSettings(raw)
 	}, product: func() string {
 		raw, _ := store.Settings()
 		p, _ := settingValue(raw, "odisProduct").(string)
