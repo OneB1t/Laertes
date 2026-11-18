@@ -29,7 +29,8 @@
 // qemu_bus= (a FlexCAN instance number; the J533's diagnostic CAN is 4) instead of the simulator:
 // ODIS's frames go to the emulated unit and its frames come back through the channel's filters, so
 // ODIS does ISO-TP and UDS with the real firmware. Bridge records (16 bytes, both directions):
-// bus, flags (bit 0: 29-bit id, bit 1: RTR), dlc, 0, id (big endian), data[8].
+// bus, flags (bit 0: 29-bit id, bit 1: RTR), dlc, 0, id (big endian), data[8]. Frames to the
+// emulator are paced at least QEMU_GAP_MS apart, as the emulated firmware loses faster ones.
 //
 // Build (32-bit): offlinevci\build.cmd
 
@@ -1534,6 +1535,20 @@ static int rawPass(const Channel *c, unsigned long canId) {
     return pass;
 }
 
+// Frames to the emulator are paced: under QEMU the gateway firmware empties its FlexCAN receive
+// mailboxes far slower than the real unit, and the emulator's FlexCAN overwrites a full mailbox when
+// the next frame arrives (OVERRUN). ODIS sends consecutive frames 5 ms apart (the gateway's STmin), so
+// a long ISO-TP message (e.g. TransferData of a data transfer) loses a frame and the gateway drops it
+// without the next flow control. Measured: frames 12 ms apart are lost, 15 ms apart arrive. So
+// qemuSend only queues the frame (it runs under the VCI lock, which the receive path needs too) and
+// qemuTxLoop sends the queue with at least QEMU_GAP_MS between frames; a lone frame goes at once.
+#define QEMU_GAP_MS 20
+#define QEMU_TXQ    1024
+static unsigned char qemuTxq[QEMU_TXQ][16];
+static unsigned qemuTxHead, qemuTxTail;     // under qemuTxLock; head == tail: empty
+static SRWLOCK qemuTxLock = SRWLOCK_INIT;
+static HANDLE qemuTxEvent, qemuTxThread;
+
 static void qemuSend(unsigned long canId, int ext, const unsigned char *data, unsigned long len) {
     unsigned char r[16];
     memset(r, 0, sizeof r);
@@ -1546,9 +1561,72 @@ static void qemuSend(unsigned long canId, int ext, const unsigned char *data, un
     r[6] = (unsigned char)(canId >> 8);
     r[7] = (unsigned char)canId;
     memcpy(r + 8, data, len);
-    AcquireSRWLockExclusive(&qemuSendLock);
-    if (qemuSock != INVALID_SOCKET) send(qemuSock, (const char *)r, 16, 0);
-    ReleaseSRWLockExclusive(&qemuSendLock);
+    int full = 0;
+    AcquireSRWLockExclusive(&qemuTxLock);
+    unsigned next = (qemuTxTail + 1) % QEMU_TXQ;
+    if (next == qemuTxHead) full = 1;
+    else {
+        memcpy(qemuTxq[qemuTxTail], r, 16);
+        qemuTxTail = next;
+    }
+    ReleaseSRWLockExclusive(&qemuTxLock);
+    if (full) {
+        static unsigned long drops;
+        if (drops++ % 1000 == 0) logStr("QEMU send queue full: frame dropped");
+    } else if (qemuTxEvent) SetEvent(qemuTxEvent);
+}
+
+// qemuWaitUntil sleeps until the performance counter reaches t, precisely (a high-resolution
+// waitable timer where Windows has one, Sleep otherwise).
+static void qemuWaitUntil(LONGLONG t, LONGLONG freq, HANDLE timer) {
+    for (;;) {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        LONGLONG left = t - now.QuadPart;
+        if (left <= 0) return;
+        if (timer) {
+            LARGE_INTEGER due;
+            due.QuadPart = -(left * 10000000 / freq);  // relative, in 100 ns units
+            if (due.QuadPart == 0) return;
+            if (SetWaitableTimer(timer, &due, 0, 0, 0, 0)) {
+                WaitForSingleObject(timer, INFINITE);
+                continue;
+            }
+        }
+        Sleep(left * 1000 / freq > 1 ? (DWORD)(left * 1000 / freq) : 1);
+    }
+}
+
+static DWORD WINAPI qemuTxLoop(LPVOID arg) {
+    (void)arg;
+    LARGE_INTEGER f, last;
+    QueryPerformanceFrequency(&f);
+    last.QuadPart = 0;
+    LONGLONG gap = f.QuadPart * QEMU_GAP_MS / 1000;
+    // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION (Windows 10 1803+); without it, a plain Sleep.
+    HANDLE timer = CreateWaitableTimerExW(0, 0, 0x00000002, TIMER_ALL_ACCESS);
+    while (qemuRun) {
+        unsigned char r[16];
+        int have = 0;
+        AcquireSRWLockExclusive(&qemuTxLock);
+        if (qemuTxHead != qemuTxTail) {
+            memcpy(r, qemuTxq[qemuTxHead], 16);
+            qemuTxHead = (qemuTxHead + 1) % QEMU_TXQ;
+            have = 1;
+        }
+        ReleaseSRWLockExclusive(&qemuTxLock);
+        if (!have) {
+            WaitForSingleObject(qemuTxEvent, 200);
+            continue;
+        }
+        if (last.QuadPart) qemuWaitUntil(last.QuadPart + gap, f.QuadPart, timer);
+        AcquireSRWLockExclusive(&qemuSendLock);
+        if (qemuSock != INVALID_SOCKET) send(qemuSock, (const char *)r, 16, 0);
+        ReleaseSRWLockExclusive(&qemuSendLock);
+        QueryPerformanceCounter(&last);
+    }
+    if (timer) CloseHandle(timer);
+    return 0;
 }
 
 // qemuDeliver hands a frame from the emulated bus to every raw CAN channel whose filters pass it.
@@ -1617,6 +1695,9 @@ static DWORD WINAPI qemuLoop(LPVOID arg) {
                 Sleep(1000);
                 continue;
             }
+            AcquireSRWLockExclusive(&qemuTxLock);  // frames queued while it was down are stale
+            qemuTxHead = qemuTxTail = 0;
+            ReleaseSRWLockExclusive(&qemuTxLock);
             AcquireSRWLockExclusive(&qemuSendLock);
             qemuSock = s;
             ReleaseSRWLockExclusive(&qemuSendLock);
@@ -1659,15 +1740,24 @@ static void startQemu(void) {
     WSADATA w;
     WSAStartup(MAKEWORD(2, 2), &w);
     qemuRun = 1;
+    qemuTxHead = qemuTxTail = 0;
+    if (!qemuTxEvent) qemuTxEvent = CreateEventA(0, FALSE, FALSE, 0);
     qemuThread = CreateThread(0, 0, qemuLoop, 0, 0, 0);
+    qemuTxThread = CreateThread(0, 0, qemuTxLoop, 0, 0, 0);
 }
 
 static void stopQemu(void) {
     if (!qemuThread) return;
     qemuRun = 0;
+    if (qemuTxEvent) SetEvent(qemuTxEvent);
     WaitForSingleObject(qemuThread, 2000);
     CloseHandle(qemuThread);
     qemuThread = 0;
+    if (qemuTxThread) {
+        WaitForSingleObject(qemuTxThread, 2000);
+        CloseHandle(qemuTxThread);
+        qemuTxThread = 0;
+    }
     AcquireSRWLockExclusive(&qemuSendLock);
     if (qemuSock != INVALID_SOCKET) closesocket(qemuSock);
     qemuSock = INVALID_SOCKET;
