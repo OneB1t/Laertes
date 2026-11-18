@@ -1366,6 +1366,39 @@ def handle_adaptation_options(cmd):
     return {"ok": True, "channel": channel, "params": []}
 
 
+# The ODX table that defines each basic setting's / output test's start parameters: one row per
+# routine (by its short or long name), its parameters with their text tables.
+ROUTINE_TABLES = {"basic": "TAB_RoutiContrBasicSetti", "output": "TAB_IOContrActuaTest"}
+
+
+def handle_routine_options(cmd):
+    """Enumerated values of the start parameters of basic setting / output test "name" ("kind" basic
+    or output), from the unit's ODX routine table, so the page can offer dropdowns as ODIS does.
+    "params" are the parameter names ODIS gave (basic_setting_info); each is matched by its short or
+    long name. Resolved by address, so no vehicle session is needed."""
+    kind, name = cmd.get("kind"), cmd.get("name")
+    if kind not in ROUTINE_TABLES or not name:
+        return {"ok": False, "error": "missing kind (basic or output) or name"}
+    table = handle_odx_table({"address": cmd.get("address"), "variant": cmd.get("variant"),
+                              "base": cmd.get("base"), "table": ROUTINE_TABLES[kind]})
+    if not table.get("ok"):
+        return {"ok": True, "name": name, "params": []}
+    names = (name, "TABROW_" + name)
+    for row in table.get("rows", []):
+        if row.get("name") in names or row.get("long_name") == name:
+            wanted = cmd.get("params") or []
+            params = []
+            for p in row.get("params", []):
+                opts = [c.get("text") for c in (p.get("values") or []) if c.get("low") == c.get("high")]
+                if not opts:
+                    continue
+                match = [w for w in wanted if w in (p.get("name"), p.get("long_name"))]
+                params.append({"name": match[0] if match else p.get("name"), "odx_name": p.get("name"),
+                               "long_name": p.get("long_name"), "options": opts})
+            return {"ok": True, "name": name, "params": params}
+    return {"ok": True, "name": name, "params": []}
+
+
 def handle_write_adaptation(cmd):
     """Writes an adaptation channel. values maps each parameter name (as read_adaptation shows,
     e.g. "Param_ActivStartStopFunct") to its new value."""
@@ -3518,6 +3551,7 @@ HANDLERS = {
     "read_adaptation": handle_read_adaptation,
     "read_adaptation_values": handle_read_adaptation_values,
     "adaptation_options": handle_adaptation_options,
+    "routine_options": handle_routine_options,
     "write_byte_coding": handle_write_byte_coding,
     "write_adaptation": handle_write_adaptation,
     "list_access_modes": handle_list_access_modes,

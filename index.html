@@ -582,12 +582,13 @@ button.exp { border-color:var(--chg); color:var(--chg); }
       continue, <i>Interval</i> sets the milliseconds between readings, ⧉ copies the current values. The live view pauses when you
       leave the tab.</dd>
     <dt>Basic settings</dt>
-    <dd>Lists the unit's routines. Open one, fill in its start parameters, tick the measurements to read with each status check and
+    <dd>Lists the unit's routines. Open one, fill in its start parameters (a dropdown of the choices from the ODIS database where the parameter has them; a
+      single choice is preselected), tick the measurements to read with each status check and
       press <b>Start basic setting…</b> (asks first). Its status and values update while it runs; <b>Stop</b> ends it. A basic
       setting can move actuators and relearn values: meet the conditions from the repair information first.</dd>
     <dt>Output tests</dt>
     <dd>Lists the unit's actuators that ODIS can drive (fans, pumps, valves, relays, lamps, motors). Open one, fill in its start
-      parameters if it has any, tick measurements to read along and press <b>Start output test…</b> (asks first): the unit drives
+      parameters if it has any (dropdowns such as ON/OFF and the control timer, as for basic settings), tick measurements to read along and press <b>Start output test…</b> (asks first): the unit drives
       the actuator, and its status and values update while it runs; <b>Stop</b> ends it. <b>Next</b> moves a sequential output
       test (older units step through their actuators one after another) on to the next actuator. Output tests move and switch
       parts of the car: keep clear and meet the conditions from the repair information first.</dd>
@@ -608,10 +609,6 @@ button.exp { border-color:var(--chg); color:var(--chg); }
     <dt>Dangerous functions</dt>
     <dd>Shown only when you untick <b>Hide dangerous functions</b> in Settings:
       <ul>
-        <li><b>Component protection (test)…</b> finds the component-protection adaptation channels and coding settings on the
-          unit and opens them in the adaptation editor, for bench testing how a unit behaves while locked. Writing <b>locks the
-          unit</b>; recovery needs an online ODIS/VW SVM session with valid GeKo credentials. Only on a unit you own and can
-          reactivate.</li>
         <li><b>⚠ Flash firmware (experimental)…</b> and <b>⚠ Run programming configuration (experimental)…</b> are <span class="chg">orange,
           experimental and untested</span>. Choose a flash container (<code>.frf</code>/<code>.odx</code>) or programming
           configuration on the ODIS PC (<b>Browse…</b>) or from your browser (<b>Upload…</b>), then <b>Read / validate
@@ -859,7 +856,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
       automatically</b>. Texts go to Google Translate only when you press 🌐, or as they are shown with automatic translation
       on.</dd>
     <dt>Dangerous functions</dt>
-    <dd><b>Hide the dangerous unit functions</b> (on by default): Flash firmware, Run programming configuration, Data transfer – write data block and Component protection (test).</dd>
+    <dd><b>Hide the dangerous unit functions</b> (on by default): Flash firmware, Run programming configuration and Data transfer – write data block.</dd>
     <dt>VW online sign-in</dt>
     <dd><b>Sign in</b> signs ODIS in to the VW online service (GRP) in your browser now; otherwise it asks when an online function
       needs it. The <b>GeKo username and password</b> are filled into ODIS's dialog when a guided function asks; <b>Save</b>
@@ -1255,7 +1252,7 @@ async function trTable(btn, i) {
 let busy = null;
 // Operations that only read (from a unit, ODIS or its database) can be retried from 📋 Activity when
 // they fail; writes, clears, routines and uploads cannot, so they go through their confirmation again.
-const RETRY_RE = /^(Loading|Reading|Searching|Looking up|Checking|Identifying|Opening|ODIS guidance|Scan all|Quick scan|Full scan|Find component protection|Car backup)/;
+const RETRY_RE = /^(Loading|Reading|Searching|Looking up|Checking|Identifying|Opening|ODIS guidance|Scan all|Quick scan|Full scan|Car backup)/;
 async function op(label, fn) {
   if (busy) { toast(`Busy: ${busy.label}. Wait for it to finish or press Stop.`, true); return; }
   const o = busy = {label, cancelled: false, onCancel: null, started: Date.now()};
@@ -1913,7 +1910,7 @@ function renderSettings() {
     </section><section class="card"><h2 class="sub">Dangerous functions</h2>
     <label style="align-items:flex-start">
       <input type="checkbox" id="setHideDangerous" ${settings.hideDangerous ? 'checked' : ''} onchange="settings.hideDangerous = this.checked; saveSettings(); renderUnitDetail()">
-      <span>Hide the dangerous unit functions: <b>Flash firmware</b>, <b>Run programming configuration</b>, <b>Data transfer – write data block</b> and <b>Component protection (test)</b>.
+      <span>Hide the dangerous unit functions: <b>Flash firmware</b>, <b>Run programming configuration</b> and <b>Data transfer – write data block</b>.
         <br><span class="meta">Hides the buttons on a unit; the other functions are unaffected.</span></span>
     </label></section><section class="card"><h2 class="sub">VW online sign-in</h2>
     <p class="meta">ODIS signs in to the VW online service (GRP) in your browser, when an online function such as component protection needs it. <b>Sign in</b> does it now.</p>
@@ -2478,8 +2475,6 @@ function renderUnitDetail() {
   let body = '';
   if (step && step.cmd && step.cmd.action === 'flash_panel') {
     body = flashPanelHTML(step, u);
-  } else if (step && step.cmd && step.cmd.action === 'cp_find') {
-    body = cpFindHTML(step, u);
   } else if (step && step.res && ROUTINES[step.cmd.action]) {
     body = basicSettingHTML(step, u);
   } else if (step && step.live) {
@@ -2526,8 +2521,7 @@ function renderUnitDetail() {
     <div class="acts">${UNIT_ACTIONS.map(([, label], i) => `<button class="op" onclick="unitStart(${i})">${esc(label)}</button>`).join('')}
       <button title="Security access (login code) for writes that need elevated access" class="op" onclick="unitLogin()">Login…</button>
       <button class="op" onclick="fullScanUnit()" title="Identification, coding and faults of this unit as a VCDS-style log">Full scan</button>
-      ${settings.hideDangerous ? '' : `<button class="warn op" onclick="cpStart()" title="Find the component-protection control on this unit and set it, to test how the unit behaves while locked (recovery needs an online VW/ODIS SVM session)">Component protection (test)…</button>
-      <button class="exp op" onclick="flashPanel('flash')" title="EXPERIMENTAL / UNTESTED: flash firmware to this unit">⚠ Flash firmware (experimental)…</button>
+      ${settings.hideDangerous ? '' : `      <button class="exp op" onclick="flashPanel('flash')" title="EXPERIMENTAL / UNTESTED: flash firmware to this unit">⚠ Flash firmware (experimental)…</button>
       <button class="exp op" onclick="flashPanel('dataset')" title="EXPERIMENTAL / UNTESTED: run an ODIS programming configuration (flash sequence) on this unit">⚠ Run programming configuration (experimental)…</button>
       <button class="exp op" onclick="flashPanel('transfer')" title="EXPERIMENTAL / UNTESTED: write a parameter dataset (.xml or ZDC .zip) to this unit, as ODIS-E's 010 Data transfer › Write data block">⚠ Data transfer – write data block (experimental)…</button>`}
       <button title="Erase the fault memory of this unit (asks first)" class="warn op" onclick="unitClearDtcs()">Clear DTCs</button></div>
@@ -7955,11 +7949,10 @@ function adaptationEditorHTML(step) {
   }).join('');
   const changed = params.some(p => (p.name in step.newVals) && String(step.newVals[p.name]) !== String(p.value));
   const texts = params.flatMap(p => [pname(p), p.value, ...((step.options || {})[p.name] || [])]);
-  return `${step.cp ? `<div class="warnbox"><b>Component-protection test.</b> Writing this locks the unit; it will not work until reactivated online through an ODIS/VW SVM session with valid credentials.</div>` : ''}
-    <h2 class="sub">Change adaptation (${esc(step.cmd.channel)}) ${trTableBtn(texts)}</h2>${hexAddr(step.addr || (units.find(u => u.index === unitSel) || {}).id) === 9 ? bcmLampHint(step.cmd.channel) : ''}
+  return `<h2 class="sub">Change adaptation (${esc(step.cmd.channel)}) ${trTableBtn(texts)}</h2>${hexAddr(step.addr || (units.find(u => u.index === unitSel) || {}).id) === 9 ? bcmLampHint(step.cmd.channel) : ''}
     <div class="meta">Pick or type a new value; changed rows are marked. Hover a name for its ODX name and current value.</div>
     ${copyNext(`<table class="vals"><tr><th>Parameter</th><th>Current</th><th>New value</th><th></th></tr>${rows}</table>`, 'Copy the parameters')}
-    <div class="bar"><button class="warn op" ${changed ? '' : 'disabled'} onclick="op('Writing adaptation', adaptWrite)" title="Shows the changes and asks for confirmation, then writes them and reads the channel back to verify">${step.cp ? 'Write — lock the unit…' : 'Write to unit…'}</button>
+    <div class="bar"><button class="warn op" ${changed ? '' : 'disabled'} onclick="op('Writing adaptation', adaptWrite)" title="Shows the changes and asks for confirmation, then writes them and reads the channel back to verify">Write to unit…</button>
       <button ${changed ? '' : 'disabled'} onclick="adaptReset()" title="Undo all changes in this table">Reset</button>
       ${step.writeMsg ? `<span class="status ${step.writeErr ? 'err' : ''}">${esc(step.writeMsg)}${step.writeErr ? ' ' + trBtn(step.writeMsg) + copyBtn(step.writeMsg) : ''}</span>` : ''}</div>`;
 }
@@ -7981,16 +7974,12 @@ async function adaptWrite() {
   const values = {}, diffs = [];
   params.forEach(p => { if ((p.name in step.newVals) && String(step.newVals[p.name]) !== String(p.value)) { values[p.name] = step.newVals[p.name]; diffs.push(`  ${p.name}: ${p.value} → ${step.newVals[p.name]}`); } });
   if (!diffs.length) return;
-  if (step.cp) {
-    const ans = prompt(`COMPONENT-PROTECTION TEST — this LOCKS the unit.\n\n${u.sname} ${u.id}, channel ${step.cmd.channel}:\n${diffs.join('\n')}\n\nAfter this the unit will not work until it is reactivated online through an ODIS/VW SVM session with valid online (GeKo) credentials. Do this only on a unit you own and can reactivate.\n\nType the unit name "${u.sname}" to confirm:`);
-    if (ans === null || ans.trim() !== String(u.sname || '').trim()) { toast('Component-protection test cancelled.'); return; }
-  } else if (!confirm(`Write adaptation to ${u.sname} ${u.id}, channel ${step.cmd.channel}?\n\n${diffs.join('\n')}\n\nThis writes to the control unit.`)) return;
+  if (!confirm(`Write adaptation to ${u.sname} ${u.id}, channel ${step.cmd.channel}?\n\n${diffs.join('\n')}\n\nThis writes to the control unit.`)) return;
   const oldV = params.filter(p => p.name in values).map(p => `${p.name}=${p.value}`).join(', ');
   const newV = Object.entries(values).map(([k, v]) => `${k}=${v}`).join(', ');
   // For the history: each changed parameter by its readable name, old → new.
   const details = params.filter(p => p.name in values).map(p =>
     `${p.translatedName && p.translatedName !== '---' ? p.translatedName : p.name}: ${p.value} → ${values[p.name]}${p.unit ? ' ' + p.unit : ''} (${step.cmd.channel})`).join('\n');
-  const detailsFull = step.cp ? 'Component protection test (unit locked until online reactivation)\n' + details : details;
   // Faults before the write, to show afterwards which ones the adaptation added or removed.
   step.dtcBefore = step.dtcAfter = null; step.dtcHidden = false;
   if (settings.dtcCheck) {
@@ -8013,11 +8002,11 @@ async function adaptWrite() {
     } else {
       step.writeMsg = `Write did NOT match for ${bad.map(k => `${k} (unit reads ${got[k] === undefined ? '—' : got[k]})`).join(', ')}.`; step.writeErr = true;
     }
-    recordChange({kind: 'adaptation', address: u.id, unit: u.sname || '', variant: u.variant || '', target: step.cmd.channel, oldValue: oldV, newValue: newV, details: detailsFull,
+    recordChange({kind: 'adaptation', address: u.id, unit: u.sname || '', variant: u.variant || '', target: step.cmd.channel, oldValue: oldV, newValue: newV, details: details,
       status: bad.length ? 'mismatch' : 'verified', note: bad.length ? 'unit reads ' + bad.map(k => `${k}=${got[k]}`).join(', ') : ''});
   } catch (e) {
     step.writeMsg = e.message; step.writeErr = true;
-    recordChange({kind: 'adaptation', address: u.id, unit: u.sname || '', variant: u.variant || '', target: step.cmd.channel, oldValue: oldV, newValue: newV, details: detailsFull, status: 'error', note: e.message});
+    recordChange({kind: 'adaptation', address: u.id, unit: u.sname || '', variant: u.variant || '', target: step.cmd.channel, oldValue: oldV, newValue: newV, details: details, status: 'error', note: e.message});
   }
   renderUnitDetail();
   if (settings.dtcCheck) {
@@ -8259,52 +8248,6 @@ function unitClearDtcs() {
 }
 function unitOpen(i) { const s = unitPath[unitPath.length - 1]; op(s.res.names[i], () => unitRun(...UNIT_NEXT[s.cmd.action](s.res.names[i], s.res))); }
 
-// --- Component protection (test) ------------------------------------------------------------
-// Putting a unit into component protection (Komponentenschutz) locks it until it is reactivated
-// online through an ODIS/VW SVM session; it is used on a bench to see how a unit behaves while
-// locked. The control is unit-specific, so this finds the likely adaptation channels and coding
-// parameters on the unit itself (read-only) and then writes through the normal, gated path.
-const CP_RE = /schutz|komponent|verbau|protect|component|\bcp\b/i;
-function cpStart() {
-  const u = units.find(u => u.index === unitSel);
-  op('Find component protection', async () => {
-    unitReport = null;
-    const step = {cmd: {action: 'cp_find'}, label: 'Component protection (test)', busy: true};
-    unitPath = [step]; renderUnitDetail();
-    try { step.allChannels = (await bridge({action: 'list_adaptation_channels', address: u.id})).names || []; }
-    catch (e) { step.err = e.message; step.allChannels = []; }
-    try {
-      const def = await codingDefinition(u);  // the unit's own textual coding definition, if any
-      step.codingParams = def && def.own ? def.own.rows.flatMap(r => r.params).map(p => p.long_name || p.name) : [];
-    } catch (e) { step.codingParams = []; }
-    step.busy = false;
-    if (curStep() === step) renderUnitDetail();
-  });
-}
-function cpFindHTML(step, u) {
-  let h = `<div class="warnbox"><b>Component protection locks the unit.</b> Once set, ${esc(u.sname || 'the unit')} ${esc(u.id || '')} will not work
-    until it is reactivated online through an ODIS/VW SVM session with valid online (GeKo) credentials. Only do this on a unit you own and can
-    reactivate — this is a driver-assistance / safety-relevant unit.</div>`;
-  if (step.busy) return h + '<div class="meta">Scanning this unit\'s adaptation channels and coding for component-protection entries…</div>';
-  if (step.err) h += `<div class="status err">${esc(step.err)} ${trBtn(step.err)}</div>`;
-  const chans = (step.allChannels || []).filter(n => CP_RE.test(n)), codes = (step.codingParams || []).filter(n => CP_RE.test(n));
-  h += `<h2 class="sub">Likely component-protection adaptation channels</h2>`;
-  h += chans.length
-    ? `<div class="names">${chans.map(n => `<button class="op warn" onclick="cpOpen('${esc(jsStr(n))}')">${esc(n)}</button>`).join('')}</div>
-       <div class="meta">Opens in the adaptation editor, where you set the value and write it (with a lock warning, confirmation and read-back).</div>`
-    : `<div class="meta">No adaptation channel on this unit matched component-protection keywords. Check the full list below, or the coding parameters.</div>`;
-  if (codes.length) h += `<h2 class="sub">Coding parameters that mention component protection</h2>
-    <div class="names">${codes.map(n => `<span>${esc(n)}</span>`).join('')}</div>
-    <div class="meta">These live in the unit's <b>Coding</b> view; change them there (the coding write has the same warning and verification).</div>`;
-  h += `<h2 class="sub">All adaptation channels (${(step.allChannels || []).length})</h2>
-    ${(step.allChannels || []).length > 20 ? '<input type="text" placeholder="Filter" oninput="filterNames(this)">' : ''}
-    <div class="names">${(step.allChannels || []).map(n => `<button class="op" onclick="cpOpen('${esc(jsStr(n))}')">${esc(n)}</button>`).join('')}</div>`;
-  return h;
-}
-// Opens a chosen channel in the adaptation editor, marked as a component-protection write so the
-// editor shows the lock warning and the write asks for a stronger confirmation.
-function cpOpen(name) { op(name, () => unitRun({action: 'read_adaptation', channel: name}, name, {cp: true})); }
-
 // --- Flash firmware / programming configuration (EXPERIMENTAL, UNTESTED) ---------------------------------
 // The file (a flash container .frf/.odx, or an ODIS programming configuration) is chosen on the ODIS PC — browsed or uploaded —
 // then read/validated (read-only), then executed through IProgrammingConfigExecutor as a
@@ -8540,7 +8483,7 @@ function basicSettingHTML(step, u) {
   const dis = running ? 'disabled' : '';
   let h = `<div class="warnbox">${rt.warn(u)}</div>`;
   if (r.params.length) h += `<h2 class="sub">Start parameters</h2><table class="vals">${r.params.map((p, i) =>
-    `<tr><td>${esc(p)}</td><td><input type="text" value="${esc(step.params[p] || '')}" ${dis} oninput="bsParam(${i}, this.value)"></td></tr>`).join('')}</table>`;
+    `<tr><td>${esc(p)}</td><td>${bsParamControl(step, p, i, dis)}</td></tr>`).join('')}</table>`;
   if (r.measurements.length) h += `<h2 class="sub">Measurements read with each check</h2>
     <input type="text" placeholder="Filter" oninput="filterNames(this)">
     <div class="names check">${r.measurements.map((m, i) =>
@@ -8556,6 +8499,15 @@ function bsRunHTML(run) {
   return `<div class="status ${run.error ? 'err' : ''}">${esc(run.phase || run.status)}${statuses ? ' — ' + esc(statuses) : ''}${run.error ? ' — ' + esc(run.error) + ' ' + trBtn(run.error) : ''}</div>
     ${rows.length ? valsTable(rows) : ''}
     ${run.data ? `<details class="rawjson"><summary>JSON</summary>${jsonView(run.data)}</details>` : ''}`;
+}
+// A start parameter's dropdown of its ODX choices when it has them (routine_options), else a free input.
+function bsParamControl(step, p, i, dis) {
+  const opts = (step.options || {})[p], v = step.params[p] || '';
+  if (opts && opts.length) {
+    return `<select ${dis} onchange="bsParam(${i}, this.value)"${txTitle(v)}>${v ? '' : '<option value="" selected>— choose —</option>'}${opts.map(o =>
+      `<option value="${esc(o)}" ${o === v ? 'selected' : ''}${txTitle(o)}>${esc(txt(o))}</option>`).join('')}</select>`;
+  }
+  return `<input type="text" value="${esc(v)}" ${dis} oninput="bsParam(${i}, this.value)">`;
 }
 function bsParam(i, v) { const s = curStep(); s.params[s.res.params[i]] = v; }
 function bsMeasure(i, on) {
@@ -9627,6 +9579,21 @@ async function unitRun(cmd, label, extra) {
       step.options = {};
       (o.params || []).forEach(p => { step.options[p.name] = p.options; });
     } catch (e) { step.options = {}; }
+    if (unitPath === path) renderUnitDetail();
+  }
+  if (step.res && ROUTINES[cmd.action]) {
+    // The start parameters' choices (ODX text tables), as dropdowns like ODIS shows them. Every
+    // name a parameter goes by points at its options; a single choice is preselected.
+    step.options = {};
+    try {
+      const o = await bridge({action: 'routine_options', kind: ROUTINES[cmd.action].type === 'output' ? 'output' : 'basic',
+        address: u.id, name: cmd.name, params: step.res.params || []});
+      (o.params || []).forEach(p => [p.name, p.odx_name, p.long_name].filter(Boolean).forEach(n => { step.options[n] = p.options; }));
+    } catch (e) { /* free text inputs then */ }
+    (step.res.params || []).forEach(p => {
+      const opts = step.options[p];
+      if (opts && opts.length === 1 && !step.params[p]) step.params[p] = opts[0];
+    });
     if (unitPath === path) renderUnitDetail();
   }
   if (step.res && cmd.action === 'read_identification') {
