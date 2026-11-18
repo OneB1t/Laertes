@@ -8266,7 +8266,8 @@ const FLASH = {flash: {label: 'Flash firmware', kind: 'firmware', what: 'a firmw
 const WRITING_PHASES = ['flashing', 'writing'];
 function flashPanel(which) {
   unitReport = null;
-  unitPath = [{cmd: {action: 'flash_panel'}, which, label: FLASH[which].label + ' (experimental)', log: []}];
+  // Reopen the browser at the folder this kind (flash/dataset/transfer) was last used in.
+  unitPath = [{cmd: {action: 'flash_panel'}, which, label: FLASH[which].label + ' (experimental)', log: [], browseDir: lastBrowseDir(which)}];
   renderUnitDetail();
 }
 function flashPanelHTML(step, u) {
@@ -8329,20 +8330,49 @@ async function flashBrowse(dir) {
   const step = curStep(); step.browse = true;
   try {
     const r = await api('GET', '/api/files?' + new URLSearchParams(dir ? {dir} : {}));
-    step.browseList = r; step.browseDir = r.dir;
-  } catch (e) { toast('Cannot list folder: ' + e.message, true); step.browseList = null; }
+    step.browseList = r; step.browseDir = r.dir; step.browseFilter = '';
+    rememberBrowseDir(step.which, r.dir);  // remember where this kind was last browsed
+  } catch (e) {
+    // A remembered folder that no longer exists: fall back to the default location.
+    if (dir) { return flashBrowse(''); }
+    toast('Cannot list folder: ' + e.message, true); step.browseList = null;
+  }
   if (curStep() === step) renderUnitDetail();
 }
 function flashBrowserHTML(step) {
   const r = step.browseList;
   if (!r) return '<div class="meta">Loading folder…</div>';
-  const row = (name, isDir, onclick) => `<div><a href="#" onclick="${onclick}; return false">${isDir ? '📁 ' : '📄 '}${esc(name)}</a></div>`;
-  const files = r.entries.filter(e => !e.dir), dirs = r.entries.filter(e => e.dir);
+  const q = (step.browseFilter || '').trim().toLowerCase();
+  const match = e => !q || e.name.toLowerCase().includes(q);
+  const dirs = r.entries.filter(e => e.dir && match(e)), files = r.entries.filter(e => !e.dir && match(e));
+  const hidden = r.entries.length - dirs.length - files.length;
+  const dirRow = e => `<div><a href="#" onclick="flashBrowse('${jsStr(r.dir + '/' + e.name)}'); return false">📁 ${flashHl(e.name, q)}</a></div>`;
+  const fileRow = e => `<div><a href="#" onclick="flashPick('${jsStr(r.dir + '/' + e.name)}'); return false">📄 ${flashHl(e.name, q)} <span class="meta">(${(e.size / 1024).toFixed(0)} KB)</span></a></div>`;
   return `<div class="browser"><div class="meta mono">${esc(r.dir)} <button onclick="curStep().browse=false; renderUnitDetail()">Close</button></div>
-    ${row('.. (up)', true, `flashBrowse('${jsStr(r.parent)}')`)}
-    ${dirs.map(e => row(e.name, true, `flashBrowse('${jsStr(r.dir + '/' + e.name)}')`)).join('')}
-    ${files.map(e => row(e.name + ` (${(e.size / 1024).toFixed(0)} KB)`, false, `flashPick('${jsStr(r.dir + '/' + e.name)}')`)).join('')}</div>`;
+    <input type="text" id="browseFilter" placeholder="Search in this folder…" value="${esc(step.browseFilter || '')}" oninput="browseFilterInput(this)" style="width:100%;box-sizing:border-box;margin:4px 0">
+    <div><a href="#" onclick="flashBrowse('${jsStr(r.parent)}'); return false">📁 .. (up)</a></div>
+    ${dirs.map(dirRow).join('')}
+    ${files.map(fileRow).join('')}
+    ${q && !dirs.length && !files.length ? '<div class="meta">No matches in this folder.</div>'
+      : (hidden > 0 ? `<div class="meta">${hidden} item${hidden === 1 ? '' : 's'} hidden by the filter.</div>` : '')}</div>`;
 }
+// Escape a name and wrap the matched substring (q is already lower-cased) in <mark> for the search highlight.
+function flashHl(name, q) {
+  if (!q) return esc(name);
+  const i = name.toLowerCase().indexOf(q);
+  if (i < 0) return esc(name);
+  return esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length));
+}
+// Filter the current folder listing as the user types, keeping focus/caret in the search box.
+function browseFilterInput(el) {
+  const step = curStep(); if (!step) return;
+  step.browseFilter = el.value; renderUnitDetail();
+  const f = $('#browseFilter'); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+}
+// Remember the last folder browsed per panel kind (flash/dataset/transfer), so it reopens there.
+const BROWSE_DIR_KEY = 'laertes.lastBrowseDir.';
+function rememberBrowseDir(which, dir) { try { if (dir) localStorage.setItem(BROWSE_DIR_KEY + which, dir); } catch (e) { /* storage unavailable */ } }
+function lastBrowseDir(which) { try { return localStorage.getItem(BROWSE_DIR_KEY + which) || ''; } catch (e) { return ''; } }
 const jsStr = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 // A check belongs to the file it read: changing the path drops it, so a different, unchecked file
 // can never be flashed. Re-rendering keeps the caret in the field.
