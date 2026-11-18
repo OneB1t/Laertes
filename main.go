@@ -19,7 +19,7 @@ import (
 )
 
 // version of Laertes, shown in the web page's top bar.
-const version = "0.9.12"
+const version = "0.9.13"
 
 //go:embed index.html
 var indexHTML []byte
@@ -213,6 +213,38 @@ func routes(store *Store, b *bridge, grp *grpReturns, odis *odisStarter, dataDir
 			return
 		}
 		log.Printf("opened backup %s", path)
+		reply(w, map[string]string{"path": path}, nil)
+	})
+	// ODIS's .html protocols of flashes and data transfers (backups.go): the list, one to view in
+	// the browser, and opening one on this PC.
+	mux.HandleFunc("GET /api/protocols", func(w http.ResponseWriter, r *http.Request) {
+		list, err := listProtocols(backupDir())
+		reply(w, map[string]any{"dir": backupDir(), "protocols": list, "now": time.Now().Format(time.RFC3339Nano)}, err)
+	})
+	mux.HandleFunc("GET /api/protocols/{name}", func(w http.ResponseWriter, r *http.Request) {
+		path := protocolPath(backupDir(), r.PathValue("name"))
+		if path == "" {
+			http.Error(w, "not an ODIS protocol", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeFile(w, r, path)
+	})
+	mux.HandleFunc("POST /api/protocols/{name}/open", func(w http.ResponseWriter, r *http.Request) {
+		path := protocolPath(backupDir(), r.PathValue("name"))
+		if path == "" {
+			http.Error(w, "not an ODIS protocol", http.StatusBadRequest)
+			return
+		}
+		if _, err := os.Stat(path); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err := exec.Command("rundll32", "url.dll,FileProtocolHandler", path).Start(); err != nil {
+			reply(w, nil, err)
+			return
+		}
+		log.Printf("opened ODIS protocol %s", path)
 		reply(w, map[string]string{"path": path}, nil)
 	})
 	// The offline VCI's CAN trace (offlinevci.c canLog): the "VCI CAN" tab polls it to show the

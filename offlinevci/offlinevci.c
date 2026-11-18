@@ -783,6 +783,15 @@ static int hexVal(char c) {
 static char qemuAddr[64];         // host:port of the QEMU gateway's CAN bridge, "" = simulate
 static unsigned long qemuBus = 4; // the emulator's CAN bus ODIS is connected to
 
+// suppress_fds: during flashing ODIS rejects a container whose FDS key type (S = series / E =
+// engineering) differs from the ECU's. When on, Laertes answers the ECU's key-type ReadDataByIdentifier
+// itself with the wanted value, so the check passes. fds_did/fds_val tune it without a rebuild
+// (confirm the DID from the FBL log: MQB_FBL_LOG=1).
+static int fdsSuppress;
+static unsigned fdsDid = 0xF1DF;              // DID ODIS reads for the FDS key type
+static unsigned char fdsVal[16] = { 'S' };    // value to report (container's key type)
+static unsigned fdsValLen = 1;
+
 static void applyConfig(const char *key, const char *value) {
     if (lstrcmpA(key, "passthru") == 0) {
         lstrcpynA(passthruPath, value, MAX_PATH);
@@ -796,6 +805,23 @@ static void applyConfig(const char *key, const char *value) {
 
     if (lstrcmpA(key, "qemu_bus") == 0 && value[0]) {
         qemuBus = strtoul(value, 0, 10);
+        return;
+    }
+
+    if (lstrcmpA(key, "suppress_fds") == 0) {
+        fdsSuppress = value[0] == '1';
+        return;
+    }
+
+    if (lstrcmpA(key, "fds_did") == 0 && value[0]) {
+        fdsDid = (unsigned)strtoul(value, 0, 16);
+        return;
+    }
+
+    if (lstrcmpA(key, "fds_val") == 0 && value[0]) {
+        unsigned nv = 0;
+        for (const char *p = value; *p && nv < sizeof fdsVal; p++) fdsVal[nv++] = (unsigned char)*p;
+        if (nv) fdsValLen = nv;
         return;
     }
 
@@ -876,6 +902,7 @@ static void loadConfig(void) {
     wakeOn = 0;
     qemuAddr[0] = 0;
     qemuBus = 4;
+    fdsSuppress = 0;
 
     char *line = buf;
     while (line && *line) {
@@ -1881,9 +1908,23 @@ long WINAPI PassThruWriteMsgs(unsigned long channelId, void *msgs, unsigned long
                 enqueueAt(c, reqId, m[k].Data + 4, m[k].DataSize - 4, TX_MSG_TYPE, 0);
 
             if (qemuMode()) { // the emulated gateway answers, over its CAN bus
+                const unsigned char *fr = m[k].Data + 4;
+                unsigned long frn = m[k].DataSize - 4;
+                int ext = (m[k].TxFlags & CAN_29BIT_ID) || reqId > 0x7FF;
+                // suppress_fds: answer the ECU's FDS key-type read locally so ODIS's S/E match passes
+                if (fdsSuppress && c->proto == CAN && frn >= 4 && fr[0] == 0x03 &&
+                    fr[1] == 0x22 && (((unsigned)fr[2] << 8) | fr[3]) == fdsDid) {
+                    unsigned char resp[8] = {0};
+                    unsigned o = 4;
+                    resp[1] = 0x62; resp[2] = fr[2]; resp[3] = fr[3];
+                    for (unsigned i = 0; i < fdsValLen && o < 8; i++) resp[o++] = fdsVal[i];
+                    resp[0] = (unsigned char)(o - 1);   // ISO-TP single-frame length
+                    logStr("suppress_fds: answering FDS key-type read locally");
+                    qemuDeliver(respIdFor(reqId), ext, resp, 8);
+                    continue;
+                }
                 if (c->proto == CAN)
-                    qemuSend(reqId, (m[k].TxFlags & CAN_29BIT_ID) || reqId > 0x7FF, m[k].Data + 4,
-                             m[k].DataSize - 4);
+                    qemuSend(reqId, ext, m[k].Data + 4, m[k].DataSize - 4);
                 else
                     logStr("QEMU gateway: only raw CAN channels are connected, ISO15765 message dropped");
                 continue;

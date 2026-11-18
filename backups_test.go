@@ -47,3 +47,29 @@ func TestBackupPath(t *testing.T) {
 		}
 	}
 }
+
+func TestProtocols(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"Dataset_WVWZZZ1KZAW000001_20261028T221904.html", "Dataset_WVWZZZ1KZAW000001_20261028T221904.xml", "ODIS_E_PROTOCOL.xsl"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := listProtocols(dir)
+	if err != nil || len(list) != 1 || list[0].Name != "Dataset_WVWZZZ1KZAW000001_20261028T221904.html" {
+		t.Fatalf("list = %+v %v", list, err)
+	}
+	for name, ok := range map[string]bool{
+		"Dataset_WVWZZZ1KZAW000001_20261028T221904.html": true,
+		`..\x.html`:  false,
+		"../x.html":  false,
+		"..html":     false,
+		"x.html.exe": false,
+		"laertes.db": false,
+		".html":      false,
+	} {
+		if got := protocolPath(`C:\d`, name) != ""; got != ok {
+			t.Errorf("protocolPath(%q) ok = %v, want %v", name, got, ok)
+		}
+	}
+}

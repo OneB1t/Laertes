@@ -612,12 +612,12 @@ button.exp { border-color:var(--chg); color:var(--chg); }
           unit and opens them in the adaptation editor, for bench testing how a unit behaves while locked. Writing <b>locks the
           unit</b>; recovery needs an online ODIS/VW SVM session with valid GeKo credentials. Only on a unit you own and can
           reactivate.</li>
-        <li><b>⚠ Flash firmware (experimental)…</b> and <b>⚠ Load dataset (experimental)…</b> are <span class="chg">orange,
+        <li><b>⚠ Flash firmware (experimental)…</b> and <b>⚠ Run programming configuration (experimental)…</b> are <span class="chg">orange,
           experimental and untested</span>. Choose a flash container (<code>.frf</code>/<code>.odx</code>) or programming
           configuration on the ODIS PC (<b>Browse…</b>) or from your browser (<b>Upload…</b>), then <b>Read / validate
           config</b> (reads only), then <b>Execute</b> (typed confirmation). A progress bar, ODIS's messages, <b>Cancel</b> and
           <b>Show the log of the last flash</b> (from ODIS's engine.log) follow the job.</li>
-        <li><b>⚠ Data transfer (experimental)…</b> is ODIS-E's <i>010 Data transfer › Write data block</i>: choose a parameter
+        <li><b>⚠ Data transfer – write data block (experimental)…</b> is ODIS-E's <i>010 Data transfer › Write data block</i>: choose a parameter
           dataset (<code>.xml</code>, or a ZDC container <code>.zip</code> such as <code>09_158.zip</code>) the same way, then
           <b>Read / validate config</b> shows its ZDC part number, content version, the datasets in it and warns when they are for
           another unit address (reads only), then <b>Execute</b> (typed confirmation) writes it with the same progress, Cancel and
@@ -859,7 +859,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
       automatically</b>. Texts go to Google Translate only when you press 🌐, or as they are shown with automatic translation
       on.</dd>
     <dt>Dangerous functions</dt>
-    <dd><b>Hide the dangerous unit functions</b> (on by default): Flash firmware, Load dataset, Data transfer and Component protection (test).</dd>
+    <dd><b>Hide the dangerous unit functions</b> (on by default): Flash firmware, Run programming configuration, Data transfer – write data block and Component protection (test).</dd>
     <dt>VW online sign-in</dt>
     <dd><b>Sign in</b> signs ODIS in to the VW online service (GRP) in your browser now; otherwise it asks when an online function
       needs it. The <b>GeKo username and password</b> are filled into ODIS's dialog when a guided function asks; <b>Save</b>
@@ -1913,7 +1913,7 @@ function renderSettings() {
     </section><section class="card"><h2 class="sub">Dangerous functions</h2>
     <label style="align-items:flex-start">
       <input type="checkbox" id="setHideDangerous" ${settings.hideDangerous ? 'checked' : ''} onchange="settings.hideDangerous = this.checked; saveSettings(); renderUnitDetail()">
-      <span>Hide the dangerous unit functions: <b>Flash firmware</b>, <b>Load dataset</b>, <b>Data transfer</b> and <b>Component protection (test)</b>.
+      <span>Hide the dangerous unit functions: <b>Flash firmware</b>, <b>Run programming configuration</b>, <b>Data transfer – write data block</b> and <b>Component protection (test)</b>.
         <br><span class="meta">Hides the buttons on a unit; the other functions are unaffected.</span></span>
     </label></section><section class="card"><h2 class="sub">VW online sign-in</h2>
     <p class="meta">ODIS signs in to the VW online service (GRP) in your browser, when an online function such as component protection needs it. <b>Sign in</b> does it now.</p>
@@ -2227,7 +2227,7 @@ async function pollVci(force) {
 // The operations of this page session (from the activity log) with their time span and a category
 // for the trace's colour: what to mark a message with when it went over the bus during one.
 const OP_CATS = [[/coding/i, 'coding', 'CODING'], [/adapt/i, 'adapt', 'ADAPTATION'], [/component protection|\bCP\b/i, 'cp', 'CP'],
-  [/basic setting/i, 'basic', 'BASIC SETTING'], [/output test/i, 'output', 'OUTPUT TEST'], [/immobil/i, 'immo', 'IMMO'], [/flash|dataset|data transfer/i, 'flash', 'FLASH']];
+  [/basic setting/i, 'basic', 'BASIC SETTING'], [/output test/i, 'output', 'OUTPUT TEST'], [/immobil/i, 'immo', 'IMMO'], [/flash|dataset|programming|data transfer/i, 'flash', 'FLASH']];
 function vciOperations() {
   return activity.filter(e => ['run', 'ok', 'err', 'stop'].includes(e.kind)).map(e => {
     const label = e.text.split(': ')[0], c = OP_CATS.find(([re]) => re.test(label));
@@ -2528,8 +2528,8 @@ function renderUnitDetail() {
       <button class="op" onclick="fullScanUnit()" title="Identification, coding and faults of this unit as a VCDS-style log">Full scan</button>
       ${settings.hideDangerous ? '' : `<button class="warn op" onclick="cpStart()" title="Find the component-protection control on this unit and set it, to test how the unit behaves while locked (recovery needs an online VW/ODIS SVM session)">Component protection (test)…</button>
       <button class="exp op" onclick="flashPanel('flash')" title="EXPERIMENTAL / UNTESTED: flash firmware to this unit">⚠ Flash firmware (experimental)…</button>
-      <button class="exp op" onclick="flashPanel('dataset')" title="EXPERIMENTAL / UNTESTED: load a dataset into this unit">⚠ Load dataset (experimental)…</button>
-      <button class="exp op" onclick="flashPanel('transfer')" title="EXPERIMENTAL / UNTESTED: write a parameter dataset (.xml or ZDC .zip) to this unit, as ODIS-E's 010 Data transfer › Write data block">⚠ Data transfer (experimental)…</button>`}
+      <button class="exp op" onclick="flashPanel('dataset')" title="EXPERIMENTAL / UNTESTED: run an ODIS programming configuration (flash sequence) on this unit">⚠ Run programming configuration (experimental)…</button>
+      <button class="exp op" onclick="flashPanel('transfer')" title="EXPERIMENTAL / UNTESTED: write a parameter dataset (.xml or ZDC .zip) to this unit, as ODIS-E's 010 Data transfer › Write data block">⚠ Data transfer – write data block (experimental)…</button>`}
       <button title="Erase the fault memory of this unit (asks first)" class="warn op" onclick="unitClearDtcs()">Clear DTCs</button></div>
     ${step ? '' : unitRecipesHTML(u, null)}
     ${step ? `<div class="status ${step.err ? 'err' : ''}">${crumbs}${step.busy ? ' …' : ''}${step.err ? ': ' + esc(step.err) + ' ' + trBtn(step.err) + copyBtn(step.err) : ''}
@@ -8305,7 +8305,7 @@ function cpFindHTML(step, u) {
 // editor shows the lock warning and the write asks for a stronger confirmation.
 function cpOpen(name) { op(name, () => unitRun({action: 'read_adaptation', channel: name}, name, {cp: true})); }
 
-// --- Flash firmware / load dataset (EXPERIMENTAL, UNTESTED) ---------------------------------
+// --- Flash firmware / programming configuration (EXPERIMENTAL, UNTESTED) ---------------------------------
 // The file (a flash container .frf/.odx, or an ODIS programming configuration) is chosen on the ODIS PC — browsed or uploaded —
 // then read/validated (read-only), then executed through IProgrammingConfigExecutor as a
 // background job whose text/percent progress this page polls. A wrong or interrupted flash can
@@ -8315,9 +8315,9 @@ function cpOpen(name) { op(name, () => unitRun({action: 'read_adaptation', chann
 // to the unit through its own bridge actions, with the same panel, job and log as a flash.
 const FLASH = {flash: {label: 'Flash firmware', kind: 'firmware', what: 'a firmware flash container (.frf/.odx) or programming configuration file',
     example: 'C:\\\\flash\\\\FL_xxxx.frf or config.xml', check: 'flash_config', run: 'flash_run'},
-  dataset: {label: 'Load dataset', kind: 'dataset', what: 'a dataset programming configuration file',
+  dataset: {label: 'Run programming configuration', kind: 'programming configuration', what: 'an ODIS programming configuration file',
     example: 'C:\\\\flash\\\\config.xml', check: 'flash_config', run: 'flash_run'},
-  transfer: {label: 'Data transfer', kind: 'transfer', what: 'a parameter dataset (.xml, or a ZDC container .zip)',
+  transfer: {label: 'Data transfer – write data block', kind: 'transfer', what: 'a parameter dataset (.xml, or a ZDC container .zip)',
     example: 'C:\\\\datasets\\\\09_158.zip or DA_0009_….xml', check: 'data_transfer_check', run: 'data_transfer_run'}};
 // The phases in which the unit is being written: cancelling then must be confirmed.
 const WRITING_PHASES = ['flashing', 'writing'];
@@ -8352,6 +8352,7 @@ function flashPanelHTML(step, u) {
     h += `<h2 class="sub">Progress</h2>
       <div class="progress ${cls}"><div style="width:${p.percent || 0}%"></div></div>
       <div class="status ${cls === 'err' ? 'err' : ''}">${p.percent || 0}% · ${esc(mmss)}${p.phase ? ' · ' + esc(p.phase) : ''} — ${esc(p.message || '')}${p.error ? ' — ' + esc(p.error) + ' ' + trBtn(p.error) : ''}</div>
+      ${p.status !== 'running' ? protocolHTML(p.protocol) : ''}
       ${p.status === 'running' ? `<div class="bar"><button title="Abort the running flash/dataset job" class="warn" onclick="flashCancel()">Cancel</button>${WRITING_PHASES.includes(p.phase) ? '<span class="meta">Cancelling during programming must be confirmed and may not be possible.</span>' : ''}</div>` : ''}
       ${step.log && step.log.length ? `<h2 class="sub">ODIS messages ${copyBtn(step.log.join('\n'), 'Copy the log')}</h2><pre class="report">${esc(step.log.join('\n'))}</pre>` : ''}`;
   }
@@ -8475,9 +8476,10 @@ function flashExecute() {
   op(f.label, async o => {
     step.log = []; step.startedAt = Date.now();
     step.progress = {percent: 0, message: 'Starting…', status: 'running', phase: 'prepare'}; renderUnitDetail();
+    const since = await protocolsNow();
     let jid;
     try {
-      const r = await bridge({action: f.run, address: u.id, file: path, resume: {type: 'flash', label: f.label,
+      const r = await bridge({action: f.run, address: u.id, file: path, resume: {type: 'flash', label: f.label, since,
         record: {kind: f.kind, address: u.id, unit: u.sname || '', variant: u.variant || '', target: path, oldValue: '', newValue: path}}});
       jid = r.job_id;
       step.flashLog = {start: r.log_offset, next: r.log_offset, lines: [], lastFlash: true};
@@ -8501,6 +8503,7 @@ function flashExecute() {
     }
     await sleep(1000);  // let ODIS write its last entries
     await flashLogFetch(step).catch(() => {});
+    step.progress.protocol = await protocolSince(since, step.progress.status === 'done' ? 10 : 4);
     recordChange({kind: f.kind, address: u.id, unit: u.sname || '', variant: u.variant || '', target: path, oldValue: '', newValue: path,
       status: step.progress.status === 'done' ? 'done' : step.progress.error ? 'error' : 'stopped', note: step.progress.error || step.progress.message});
     if (curStep() === step) renderUnitDetail();
@@ -9126,7 +9129,8 @@ function resumedHTML(r) {
       : '<button onclick="resumed = null; $(\'#resumed\').hidden = true">Close</button>'}</div>
     <div class="status ${err ? 'err' : ''}">${esc(r.phase || r.status)}${typeof r.percent === 'number' ? ' · ' + r.percent + '%' : ''}${r.message ? ' — ' + esc(r.message) : ''}${statuses ? ' — ' + esc(statuses) : ''}</div>
     ${err ? `<div class="errbox">${copyBtn(err, 'Copy the error')}<b>Error</b><pre>${esc(err)}</pre></div>` : ''}
-    ${ROUTINE_TYPES.includes(r.type) && r.data ? valsTable(resultRows(r.data)) : ''}`;
+    ${ROUTINE_TYPES.includes(r.type) && r.data ? valsTable(resultRows(r.data)) : ''}
+    ${r.status !== 'running' ? protocolHTML(r.protocol) : ''}`;
 }
 function resumedRender() { const el = $('#resumed'); el.hidden = !resumed; if (resumed) el.innerHTML = resumedHTML(resumed); }
 // Stop follows the rules of the page that started the job: a flash that is programming must be confirmed.
@@ -9155,6 +9159,7 @@ function resumeJob(job) {
       resumedRender();
       await sleep(700);
     }
+    if (res.type === 'flash') { resumedRender(); resumed.protocol = await protocolSince(res.since, resumed.status === 'done' ? 10 : 4); }
     resumedRender();
     if (res.record) {
       const r = resumed, status = r.status === 'done' ? 'done' : r.error ? 'error' : 'stopped';
@@ -9409,6 +9414,48 @@ async function backupPoll(jid, o) {
 }
 async function backupOpen(name) {
   try { const r = await api('POST', `/api/backups/${encodeURIComponent(name)}/open`); toast('Opened ' + r.path); }
+  catch (e) { toast(e.message, true); }
+}
+// ODIS's protocol of a flash or data transfer: when the job ends (done or failed) ODIS writes an
+// .html report (Dataset_<VIN>_<time>.html …) to its DiagnosticProtocols folder. The page notes the
+// server's time before the job and afterwards links the newest report written since.
+async function protocolsNow() {
+  try { return (await api('GET', '/api/protocols')).now; } catch (e) { return null; }
+}
+async function protocolSince(since, tries) {
+  const t0 = Date.parse(since || '');
+  if (isNaN(t0)) return null;
+  for (let i = 0; i < tries; i++) {  // ODIS writes the report a moment after the job ends
+    try {
+      const p = (await api('GET', '/api/protocols')).protocols.find(p => Date.parse(p.time) >= t0 - 1000);
+      if (p) return p.name;
+    } catch (e) { return null; }
+    await sleep(1000);
+  }
+  return null;
+}
+function protocolHTML(name) {
+  if (!name) return '';
+  const n = esc(jsStr(name));
+  return `<div class="bar"><span class="meta">ODIS protocol <span class="mono">${esc(name)}</span></span>
+    <button class="op" onclick="protocolView('${n}')" title="Show the report ODIS wrote about this job in a new tab">Open ODIS report</button>
+    <button onclick="protocolOpen('${n}')" title="Open the report on the ODIS PC with its default browser">Open on this PC</button></div>`;
+}
+// The report is fetched (every /api/ request carries the client id) and shown from a blob in a new
+// tab, with its scripts disabled so it cannot act as this page.
+async function protocolView(name) {
+  const w = window.open('', '_blank');  // opened inside the click, so a popup blocker lets it through
+  try {
+    const res = await fetch(`/api/protocols/${encodeURIComponent(name)}`, {headers: {'X-Laertes-Client': clientId}});
+    if (!res.ok) throw new Error(await res.text());
+    const html = `<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>${esc(name)}</title>` + await res.text();
+    const url = URL.createObjectURL(new Blob([html], {type: 'text/html;charset=utf-8'}));
+    if (w) w.location = url; else window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { if (w) w.close(); toast(e.message, true); }
+}
+async function protocolOpen(name) {
+  try { const r = await api('POST', `/api/protocols/${encodeURIComponent(name)}/open`); toast('Opened ' + r.path); }
   catch (e) { toast(e.message, true); }
 }
 // Downloads through fetch, since every /api/ request must carry this page's client id.

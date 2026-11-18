@@ -2761,7 +2761,7 @@ def handle_service_methods(cmd):
             context.ungetService(ref)
 
 
-# --- Long-running jobs with progress (flash firmware / load dataset) -----------------------
+# --- Long-running jobs with progress (flash firmware / programming configuration / data transfer) -----------------------
 # These operations take minutes, so they run in a background thread and the web page polls
 # "job_status" for progress (percent, the text ODIS reports, and a phase). One runs at a time on
 # the vehicle (DIAG_LOCK). Flashing is driven through the ODIS programming API
@@ -3064,6 +3064,81 @@ def handle_flash_run(cmd):
                 context.ungetService(ref)
     log_offset = _engine_log_size()  # read by job() once execute returns
     return {"ok": True, "job_id": run_background(job, cmd), "log_offset": log_offset}
+
+
+# ODIS protocols of flashes and data transfers, written the way ODIS's own screens write them.
+# The automation interface keeps a protocol (IDiagnosticsProtocolHandler over ODIS's
+# ISelfDiagProtocolModel): started before a job, it records what the job does (dataSetDownload adds
+# its "010.01 Writing the Data Set" result, a failed command its error), and storeProtocol writes the
+# .xml, the .html ODIS renders from it with ODIS_E_PROTOCOL.xsl and the stylesheet into
+# DiagnosticProtocols. A flash runs through the programming executor, which records nothing there,
+# so it is added as ODIS's flash screen adds it (FlashingResultModel.addFlashResultToProtocol): a new
+# flash section, the unit's identification, the "006 Flashing" result, the identification after.
+# The protocol never decides a job: every step of it is best effort.
+PROTOCOL_DIR = r"C:\ProgramData\OE\DiagnosticProtocols"
+
+
+def _protocol_start(diag):
+    """Starts a new, empty automation protocol and returns its handler (None if ODIS refused)."""
+    try:
+        handler = diag.getDiagnosticsProtocolHandler()
+        diag.discardProtocol()  # drops what an earlier job left; any state may be discarded
+        diag.initProtocol()
+        diag.startProtocol()
+        return handler
+    except (Exception, Throwable):
+        traceback.print_exc()
+        return None
+
+
+def _protocol_store(diag, handler, kind, jid):
+    """Stops the protocol and stores it as <kind>_<VIN>_<time>.xml (+ .html) in DiagnosticProtocols.
+    The name of the .html goes into the job's data, where the page finds it however the job ended."""
+    if handler is None:
+        return None
+    try:
+        diag.stopProtocol()
+        vin = handle_vin({}).get("vin")  # a valid VIN or None, so the name is always a file name
+        if not os.path.isdir(PROTOCOL_DIR):
+            os.makedirs(PROTOCOL_DIR)
+        path = os.path.join(PROTOCOL_DIR, "%s_%s%s.xml" % (kind, vin + "_" if vin else "", time.strftime("%Y%m%dT%H%M%S")))
+        handler.storeProtocol(path)
+        html = path[:-4] + ".html"
+        if not os.path.exists(html):
+            return None
+        _job_set(jid, data={"protocol": os.path.basename(html)})
+        return os.path.basename(html)
+    except (Exception, Throwable):
+        traceback.print_exc()
+        return None
+
+
+def _protocol_model(handler):
+    """The ODIS protocol model (ISelfDiagProtocolModel) behind the automation protocol handler."""
+    f = handler.getClass().getDeclaredField("itsISelfDiagProtocolModel")
+    f.setAccessible(True)
+    return f.get(handler)
+
+
+def _protocol_try(fn, *args):
+    try:
+        fn(*args)
+    except (Exception, Throwable):
+        traceback.print_exc()
+
+
+def _protocol_unit(address):
+    """ODIS's UI control unit (IControlUnit) of the unit at address, as its protocol entries need,
+    or None when the vehicle project has no such unit."""
+    from java.lang import Class
+    unit_class = _bundle("de.volkswagen.odis.vaudas.business").loadClass(
+        "de.volkswagen.odis.vaudas.business.zecret.UiControlUnitImpl")
+    wrap = [c for c in Class.getConstructors(unit_class) if len(c.getParameterTypes()) == 1][0]
+    for e in session_vehicle().getActualECUs() or []:
+        u = wrap.newInstance([e])
+        if u.getAddress() == address:
+            return u
+    return None
 
 
 # Data transfer: ODIS-E's 010 Data transfer, "Write data block". The automation API's
