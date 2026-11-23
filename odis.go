@@ -64,6 +64,7 @@ func applyODISProduct(p string) {
 	offlineConfPath = filepath.Join(odisDir, "laertes", "offline.conf")
 	wakeFlagPath = filepath.Join(odisDir, "laertes", "wake.on")
 	offlineCANLogPath = filepath.Join(odisDir, "laertes", "vci-can.log")
+	canSendPath = filepath.Join(odisDir, "laertes", "can-send.txt")
 	gsbLogPath = filepath.Join(odisDir, "laertes", "gsb.log")
 }
 
@@ -132,6 +133,7 @@ type odisStarter struct {
 	vin        func() string // the simulation VIN for offline mode (nil or "" keeps the VCI default)
 	wake       func() wakeConfig // the clamp 15 wake-up frame (nil: none)
 	qemu       func() qemuConfig // the virtual VCI's connection to a QEMU gateway (nil: simulate)
+	canSend    func() bool       // route the user's own VCI through Laertes's VCI DLL, to send CAN frames
 	product    func() string     // the chosen ODIS product ("OE"/"OS"); applied before each start
 
 	mu       sync.Mutex
@@ -271,19 +273,25 @@ func (o *odisStarter) run(project string, offline bool) error {
 			if err := useOfflineVCI(); err != nil {
 				return fmt.Errorf("select the offline VCI for ODIS: %w", err)
 			}
-		} else if wake := o.wakeFrame(); wake.On {
+		} else if wake := o.wakeFrame(); wake.On || (o.canSend != nil && o.canSend()) {
 			// ODIS uses Laertes's VCI DLL, which forwards to the user's own VCI and sends the
-			// wake-up frame next to ODIS's traffic.
-			o.set("starting", "Setting up the clamp 15 wake-up on your VCI…")
+			// wake-up frame and the frames of the CAN send tab next to ODIS's traffic.
+			o.set("starting", "Routing your VCI through Laertes…")
 			name, lib, err := userJ2534Driver()
 			if err != nil {
 				return err
 			}
-			log.Printf("clamp 15 wake-up: forwarding to %s (%s), frame %s#%s every %d ms", name, lib, wake.ID, wake.Data, wake.Ms)
+			if wake.On {
+				log.Printf("clamp 15 wake-up: forwarding to %s (%s), frame %s#%s every %d ms", name, lib, wake.ID, wake.Data, wake.Ms)
+			} else {
+				log.Printf("CAN send: forwarding to %s (%s)", name, lib)
+			}
 			if err := installOfflineVCI(); err != nil {
 				return err
 			}
-			setIgnition(true) // a session with the wake-up starts with the ignition on
+			if wake.On {
+				setIgnition(true) // a session with the wake-up starts with the ignition on
+			}
 			if err := writeOfflineConfig(offlineConfig{Wake: wake, Passthru: lib, PassthruName: name}); err != nil {
 				return fmt.Errorf("write the VCI configuration: %w", err)
 			}

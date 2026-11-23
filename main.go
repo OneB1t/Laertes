@@ -19,7 +19,7 @@ import (
 )
 
 // version of Laertes, shown in the web page's top bar.
-const version = "0.9.16"
+const version = "0.9.17"
 
 //go:embed index.html
 var indexHTML []byte
@@ -86,6 +86,10 @@ func main() {
 	}, qemu: func() qemuConfig {
 		raw, _ := store.Settings()
 		return qemuFromSettings(raw)
+	}, canSend: func() bool {
+		raw, _ := store.Settings()
+		on, _ := settingValue(raw, "canSendOwnVci").(bool)
+		return on
 	}, product: func() string {
 		raw, _ := store.Settings()
 		p, _ := settingValue(raw, "odisProduct").(string)
@@ -299,6 +303,49 @@ func routes(store *Store, b *bridge, grp *grpReturns, odis *odisStarter, dataDir
 			log.Printf("ignition (wake-up frame) %s", map[bool]string{true: "on", false: "off"}[req.On])
 		}
 		reply(w, odis.status(), err)
+	})
+	// The CAN send tab: frames go to the VCI DLL (offlinevci.go queueCANSend), which sends them on
+	// the user's VCI, to the QEMU gateway, or (simulated) into the trace.
+	mux.HandleFunc("POST /api/vci/can/send", func(w http.ResponseWriter, r *http.Request) {
+		var f canFrame
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&f); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		line, err := canSendLine(f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := canSendAvailable(); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if err = queueCANSend(line); err == nil {
+			log.Printf("CAN send: %s", line)
+		}
+		reply(w, map[string]string{"vci": selectedVCI()}, err)
+	})
+	// Stops the periodic frame with that CAN ID, or all of them (no ID).
+	mux.HandleFunc("POST /api/vci/can/stop", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req)
+		line := "STOP"
+		if req.ID != "" {
+			l, err := canSendLine(canFrame{ID: req.ID})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			line += " " + strings.Fields(l)[0]
+		}
+		if err := canSendAvailable(); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		reply(w, nil, queueCANSend(line))
 	})
 	mux.HandleFunc("POST /api/vci/can/clear", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, clearCANLog())

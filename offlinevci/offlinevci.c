@@ -32,6 +32,10 @@
 // bus, flags (bit 0: 29-bit id, bit 1: RTR), dlc, 0, id (big endian), data[8]. Frames to the
 // emulator are paced at least QEMU_GAP_MS apart, as the emulated firmware loses faster ones.
 //
+// CAN send: Laertes's VCI CAN panel queues frames in can-send.txt next to this DLL; while ODIS has
+// the device open a thread takes them (see "CAN send") and sends them once or periodically: on the
+// bus through a real driver, to the QEMU gateway, or, on the simulated device, into the trace only.
+//
 // Build (32-bit): offlinevci\build.cmd
 
 #include <winsock2.h>
@@ -1408,6 +1412,9 @@ static int loadReal(void) {
 
 // --- Wake-up frame -------------------------------------------------------------------------------
 
+static unsigned long sendCh; // a raw CAN channel opened for Laertes's frames (see "CAN send"), 0 = none
+static SRWLOCK sendLock = SRWLOCK_INIT;
+
 static HANDLE wakeThread;
 static volatile LONG wakeRun;
 static unsigned long wakeAnchor; // the ODIS channel whose connection started the wake-up
@@ -1487,7 +1494,12 @@ static void startWake(unsigned long deviceId, unsigned long ch, unsigned long pr
 
     wakeCh = ch;
     wakeOwnCh = 0;
-    if (real.lib && protocolId != CAN) {
+    AcquireSRWLockShared(&sendLock);
+    unsigned long shared = sendCh;
+    ReleaseSRWLockShared(&sendLock);
+    if (real.lib && protocolId != CAN && shared) {
+        wakeCh = shared; // a second raw CAN channel may be refused: share the one opened for sending
+    } else if (real.lib && protocolId != CAN) {
         // An ISO15765 channel cannot send a raw frame: open a raw CAN channel next to it.
         if (real.connect(deviceId, CAN, CAN_ID_BOTH, baudrate, &wakeCh)) {
             logStr("WAKE could not open a raw CAN channel next to ODIS's channel");
@@ -1765,6 +1777,255 @@ static void stopQemu(void) {
     WSACleanup();
 }
 
+// --- CAN send (see the top of this file) ---------------------------------------------------------
+
+// can-send.txt lines, appended by Laertes (offlinevci.go queueCANSend):
+//   <id> <data>               send once (id hex, above 7FF 29-bit; data hex, "-" for no bytes)
+//   <id> <data> <ms> <count>  send every ms, count times (0: until stopped); replaces an earlier
+//                             periodic frame with the same id
+//   STOP [<id>]               stop the periodic frame with that id, or all of them
+// The thread takes the file (renames it) every SEND_POLL_MS. A file left from before the device
+// opened is stale and deleted.
+#define SEND_POLL_MS 20
+#define MAXPERIODIC  16
+
+typedef struct {
+    unsigned long id, len, ms, left; // left: sends to go, 0 = until stopped
+    unsigned char data[8];
+    DWORD due;
+    int on;
+} Periodic;
+
+static Periodic periodic[MAXPERIODIC];
+static HANDLE sendThread;
+static volatile LONG sendRun;
+static unsigned long sendDev, sendBaud;           // device and bit rate of ODIS's newest channel
+static unsigned long sendAnchor, sendAnchorProto; // ODIS's newest channel, 0 = none
+static int sendOwnCh;                             // sendCh was opened here
+
+// sendChannel returns the real driver's raw CAN channel to send on: the wake-up's, ODIS's own raw
+// CAN channel, or one opened next to ODIS's ISO15765 channel (0 while ODIS has none connected).
+static unsigned long sendChannel(void) {
+    if (wakeThread) return wakeCh;
+    unsigned long ch = 0;
+    AcquireSRWLockExclusive(&sendLock);
+    if (sendCh) ch = sendCh;
+    else if (sendAnchor && sendAnchorProto == CAN) ch = sendAnchor;
+    else if (sendAnchor) {
+        if (real.connect(sendDev, CAN, CAN_ID_BOTH, sendBaud, &sendCh) == 0) {
+            sendOwnCh = 1;
+            ch = sendCh;
+            logStr("SEND opened a raw CAN channel next to ODIS's channel");
+        } else {
+            sendCh = 0;
+            logStr("SEND could not open a raw CAN channel next to ODIS's channel");
+        }
+    }
+    ReleaseSRWLockExclusive(&sendLock);
+    return ch;
+}
+
+// closeSendChannel disconnects the raw channel opened for sending, unless the wake-up uses it.
+static void closeSendChannel(void) {
+    AcquireSRWLockExclusive(&sendLock);
+    if (sendOwnCh && sendCh && real.lib && !(wakeThread && wakeCh == sendCh)) real.disconnect(sendCh);
+    sendCh = 0;
+    sendOwnCh = 0;
+    ReleaseSRWLockExclusive(&sendLock);
+}
+
+// sendFrame puts one frame on the bus (real driver), to the emulator (QEMU) or, simulated, only
+// into the trace; kind S is a single frame, Q one of a periodic frame.
+static void sendFrame(unsigned long id, const unsigned char *d, unsigned long len, char kind) {
+    unsigned long ch = 0;
+    if (real.lib) {
+        ch = sendChannel();
+        if (!ch) {
+            logStr("SEND no CAN channel: ODIS has not connected to the vehicle yet, frame dropped");
+            return;
+        }
+        static PASSTHRU_MSG m;
+        memset(&m, 0, offsetof(PASSTHRU_MSG, Data));
+        m.ProtocolID = CAN;
+        m.TxFlags = id > 0x7FF ? CAN_29BIT_ID : 0;
+        m.DataSize = 4 + len;
+        m.Data[0] = (unsigned char)(id >> 24);
+        m.Data[1] = (unsigned char)(id >> 16);
+        m.Data[2] = (unsigned char)(id >> 8);
+        m.Data[3] = (unsigned char)id;
+        memcpy(m.Data + 4, d, len);
+        unsigned long n = 1;
+        long err = real.write(ch, &m, &n, 50);
+        if (err) {
+            char b[48];
+            unsigned long o = 0;
+            const char *p = "SEND write failed err=";
+            while (*p) b[o++] = *p++;
+            putHexU32(b, &o, (unsigned long)err, 1);
+            logWrite(b, o);
+            return;
+        }
+    } else if (qemuMode()) {
+        qemuSend(id, id > 0x7FF, d, len);
+    }
+    canLog(kind, ch, id, d, len);
+}
+
+static char *sendToken(char **p) {
+    while (**p == ' ' || **p == '\t') (*p)++;
+    char *t = *p;
+    while (**p && **p != ' ' && **p != '\t') (*p)++;
+    if (**p) *(*p)++ = 0;
+    return t;
+}
+
+static void sendLine(char *line) {
+    char *p = line, *a = sendToken(&p);
+    if (!*a) return;
+    if (lstrcmpiA(a, "STOP") == 0) {
+        char *t = sendToken(&p);
+        unsigned long id = *t ? strtoul(t, 0, 16) : 0;
+        for (int i = 0; i < MAXPERIODIC; i++)
+            if (periodic[i].on && (!*t || periodic[i].id == id)) periodic[i].on = 0;
+        logStr(*t ? "SEND periodic frame stopped" : "SEND all periodic frames stopped");
+        return;
+    }
+    unsigned long id = strtoul(a, 0, 16) & 0x1FFFFFFF;
+    char *hex = sendToken(&p), *ms = sendToken(&p), *count = sendToken(&p);
+    unsigned char d[8];
+    unsigned long len = 0;
+    if (hex[0] != '-')
+        for (char *h = hex; h[0] && h[1] && len < 8; h += 2) {
+            int hi = hexVal(h[0]), lo = hexVal(h[1]);
+            if (hi < 0 || lo < 0) break;
+            d[len++] = (unsigned char)(hi << 4 | lo);
+        }
+    unsigned long every = *ms ? strtoul(ms, 0, 10) : 0;
+    if (!every) {
+        sendFrame(id, d, len, 'S');
+        return;
+    }
+    if (every < 10) every = 10;
+    int slot = -1;
+    for (int i = 0; i < MAXPERIODIC; i++)
+        if (periodic[i].on && periodic[i].id == id) slot = i;
+    for (int i = 0; i < MAXPERIODIC && slot < 0; i++)
+        if (!periodic[i].on) slot = i;
+    if (slot < 0) {
+        logStr("SEND too many periodic frames: stop one first");
+        return;
+    }
+    Periodic *q = &periodic[slot];
+    q->id = id;
+    q->len = len;
+    memcpy(q->data, d, len);
+    q->ms = every;
+    q->left = *count ? strtoul(count, 0, 10) : 0;
+    q->due = GetTickCount();
+    q->on = 1;
+    logStr("SEND periodic frame started");
+}
+
+// sendTake runs the lines Laertes queued in can-send.txt since the last poll.
+static void sendTake(const char *path, const char *work) {
+    if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) return;
+    if (!MoveFileExA(path, work, MOVEFILE_REPLACE_EXISTING)) return; // Laertes is writing: next poll
+    HANDLE f = CreateFileA(work, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (f == INVALID_HANDLE_VALUE) return;
+    static char buf[16384];
+    DWORD got = 0;
+    ReadFile(f, buf, sizeof buf - 1, &got, 0);
+    CloseHandle(f);
+    DeleteFileA(work);
+    buf[got] = 0;
+    for (char *line = buf; *line;) {
+        char *nl = line;
+        while (*nl && *nl != '\n') nl++;
+        char more = *nl;
+        *nl = 0;
+        for (char *e = nl; e > line && (e[-1] == '\r' || e[-1] == ' ');) *--e = 0;
+        sendLine(line);
+        if (!more) break;
+        line = nl + 1;
+    }
+}
+
+static DWORD WINAPI sendLoop(LPVOID arg) {
+    (void)arg;
+    char path[MAX_PATH], work[MAX_PATH];
+    laertesFile(path, sizeof path, "can-send.txt");
+    laertesFile(work, sizeof work, "can-send.work");
+    if (!path[0] || !work[0]) return 0;
+    DeleteFileA(path); // frames queued before this session are stale
+    DWORD lastPoll = GetTickCount() - SEND_POLL_MS;
+    while (sendRun) {
+        if (GetTickCount() - lastPoll >= SEND_POLL_MS) {
+            sendTake(path, work);
+            lastPoll = GetTickCount();
+        }
+        DWORD wait = SEND_POLL_MS;
+        for (int i = 0; i < MAXPERIODIC; i++) {
+            Periodic *q = &periodic[i];
+            if (!q->on) continue;
+            if ((LONG)(GetTickCount() - q->due) >= 0) {
+                sendFrame(q->id, q->data, q->len, 'Q');
+                q->due += q->ms;
+                if ((LONG)(GetTickCount() - q->due) > (LONG)q->ms) q->due = GetTickCount() + q->ms; // fell behind
+                if (q->left && --q->left == 0) {
+                    q->on = 0;
+                    logStr("SEND periodic frame done");
+                    continue;
+                }
+            }
+            LONG left = (LONG)(q->due - GetTickCount());
+            if (left < 1) left = 1;
+            if ((DWORD)left < wait) wait = (DWORD)left;
+        }
+        Sleep(wait);
+    }
+    return 0;
+}
+
+static void startSend(void) {
+    if (sendThread) return;
+    memset(periodic, 0, sizeof periodic);
+    sendRun = 1;
+    sendThread = CreateThread(0, 0, sendLoop, 0, 0, 0);
+}
+
+static void stopSend(void) {
+    if (!sendThread) return;
+    sendRun = 0;
+    WaitForSingleObject(sendThread, 2000);
+    CloseHandle(sendThread);
+    sendThread = 0;
+    closeSendChannel();
+    AcquireSRWLockExclusive(&sendLock);
+    sendAnchor = 0;
+    ReleaseSRWLockExclusive(&sendLock);
+}
+
+// sendConnected notes ODIS's newest channel: Laertes's frames go out next to it.
+static void sendConnected(unsigned long deviceId, unsigned long ch, unsigned long protocolId, unsigned long baudrate) {
+    AcquireSRWLockExclusive(&sendLock);
+    sendDev = deviceId;
+    sendBaud = baudrate;
+    sendAnchor = ch;
+    sendAnchorProto = protocolId;
+    ReleaseSRWLockExclusive(&sendLock);
+}
+
+static void sendDisconnected(unsigned long ch) {
+    AcquireSRWLockShared(&sendLock);
+    int anchor = ch == sendAnchor;
+    ReleaseSRWLockShared(&sendLock);
+    if (!anchor) return;
+    closeSendChannel();
+    AcquireSRWLockExclusive(&sendLock);
+    sendAnchor = 0;
+    ReleaseSRWLockExclusive(&sendLock);
+}
+
 // --- J2534 entry points --------------------------------------------------------------------------
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
@@ -1812,6 +2073,7 @@ long WINAPI PassThruOpen(void *name, unsigned long *deviceId) {
     logWrite(b, o);
 
     if (!passthruPath[0] && qemuAddr[0]) startQemu();
+    startSend();
 
     if (passthruPath[0]) {
         if (!loadReal()) {
@@ -1825,6 +2087,7 @@ long WINAPI PassThruOpen(void *name, unsigned long *deviceId) {
 }
 
 long WINAPI PassThruClose(unsigned long deviceId) {
+    stopSend();
     stopWake();
     stopQemu();
     if (real.lib) return real.close(deviceId);
@@ -1835,7 +2098,10 @@ long WINAPI PassThruConnect(unsigned long deviceId, unsigned long protocolId, un
                             unsigned long baudrate, unsigned long *channelId) {
     if (real.lib) {
         long err = real.connect(deviceId, protocolId, flags, baudrate, channelId);
-        if (!err) startWake(deviceId, *channelId, protocolId, baudrate);
+        if (!err) {
+            startWake(deviceId, *channelId, protocolId, baudrate);
+            sendConnected(deviceId, *channelId, protocolId, baudrate);
+        }
         return err;
     }
 
@@ -1870,11 +2136,13 @@ long WINAPI PassThruConnect(unsigned long deviceId, unsigned long protocolId, un
     ReleaseSRWLockExclusive(&lock);
 
     startWake(deviceId, *channelId, protocolId, baudrate);
+    sendConnected(deviceId, *channelId, protocolId, baudrate);
     return STATUS_NOERROR;
 }
 
 long WINAPI PassThruDisconnect(unsigned long channelId) {
     if (wakeThread && channelId == wakeAnchor) stopWake();
+    sendDisconnected(channelId);
     if (real.lib) return real.disconnect(channelId);
 
     AcquireSRWLockExclusive(&lock);

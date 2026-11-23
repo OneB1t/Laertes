@@ -77,9 +77,9 @@ func readCANLog() []string {
 		return []string{}
 	}
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	const max, maxWake = 4000, 50
+	const max, maxWake, maxPeriodic = 4000, 50, 200
 	var out []string
-	wake := 0
+	wake, periodic := 0, 0
 	for i := len(lines) - 1; i >= 0 && len(out) < max; i-- {
 		l := strings.TrimSpace(lines[i])
 		if l == "" {
@@ -91,6 +91,11 @@ func readCANLog() []string {
 		}
 		if len(f) > 1 && f[1] == "W" {
 			if wake++; wake > maxWake {
+				continue
+			}
+		}
+		if len(f) > 1 && f[1] == "Q" { // periodic frames of the CAN send tab, likewise
+			if periodic++; periodic > maxPeriodic {
 				continue
 			}
 		}
@@ -107,6 +112,74 @@ func readCANLog() []string {
 // 32-bit millisecond tick (GetTickCount), so unix milliseconds = tick + this offset.
 func canTickOffset() int64 {
 	return time.Now().UnixMilli() - int64(uint32(windows.DurationSinceBoot().Milliseconds()))
+}
+
+// canSendPath is where the CAN send tab queues frames for the VCI DLL (offlinevci.c "CAN send"):
+// one command per line, taken and deleted by the DLL while ODIS has the device open.
+var canSendPath string // set by applyODISProduct: <odisDir>\laertes\can-send.txt
+
+// canFrame is one frame of the CAN send tab: sent once (Ms 0) or every Ms milliseconds, Count
+// times (0: until stopped).
+type canFrame struct {
+	ID    string `json:"id"`   // hex, up to 7FF 11-bit, above 29-bit
+	Data  string `json:"data"` // hex, 0 to 8 bytes; spaces allowed
+	Ms    int    `json:"ms"`
+	Count int    `json:"count"`
+}
+
+// canSendLine validates a frame and turns it into the DLL's line ("<id> <data> [<ms> <count>]").
+func canSendLine(f canFrame) (string, error) {
+	id := strings.ToUpper(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(f.ID), "0x"), "0X"))
+	n, err := strconv.ParseUint(id, 16, 32)
+	if id == "" || err != nil || n > 0x1FFFFFFF {
+		return "", fmt.Errorf("CAN ID %q: give a hex ID up to 1FFFFFFF (up to 7FF is 11-bit)", f.ID)
+	}
+	data := strings.ToUpper(strings.NewReplacer(" ", "", ",", "", ":", "", "-", "").Replace(f.Data))
+	if len(data)%2 != 0 || len(data) > 16 || strings.Trim(data, "0123456789ABCDEF") != "" {
+		return "", fmt.Errorf("data %q: give 0 to 8 bytes in hex, e.g. 02 10 03", f.Data)
+	}
+	if data == "" {
+		data = "-"
+	}
+	line := strconv.FormatUint(n, 16) + " " + data
+	switch {
+	case f.Ms == 0:
+	case f.Ms < 10 || f.Ms > 60000:
+		return "", errors.New("the interval is 10 to 60000 ms (0 sends once)")
+	case f.Count < 0 || f.Count > 1000000:
+		return "", errors.New("the count is 0 (until stopped) to 1000000")
+	default:
+		line += fmt.Sprintf(" %d %d", f.Ms, f.Count)
+	}
+	return strings.ToUpper(line), nil
+}
+
+// canSendAvailable reports why frames cannot be sent: ODIS must use Laertes's VCI DLL.
+func canSendAvailable() error {
+	props, _ := os.ReadFile(vciProperties())
+	if parseProperties(string(props))["vci_modulename"] != offlineVCIName {
+		return errors.New("ODIS does not use Laertes's VCI: start the bridge with the virtual VCI, or tick Settings › CAN send on your VCI (or the clamp 15 wake-up) and start the bridge again")
+	}
+	return nil
+}
+
+// queueCANSend appends lines for the VCI DLL to take (frames, or STOP [id]).
+func queueCANSend(lines ...string) error {
+	if err := canSendAvailable(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(canSendPath), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(canSendPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(strings.Join(lines, "\n") + "\n")
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // clearCANLog empties the VCI CAN trace (truncates; the VCI reopens it on its next message).
@@ -313,7 +386,10 @@ func selectedVCI() string {
 		conf, _ := os.ReadFile(offlineConfPath)
 		p := parseProperties(string(conf))
 		if real := p["passthru_name"]; real != "" {
-			return real + " via Laertes (clamp 15 wake-up)"
+			if p["wake"] == "1" {
+				return real + " via Laertes (clamp 15 wake-up, CAN send)"
+			}
+			return real + " via Laertes (CAN send)"
 		}
 		if addr := p["qemu"]; addr != "" {
 			return "Laertes virtual VCI → QEMU gateway " + addr + ", CAN" + p["qemu_bus"]

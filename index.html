@@ -67,6 +67,7 @@ table.can tr.neg td.dir, table.can tr.neg td.m { color:var(--warn); }
 table.can tr.pend td.dir, table.can tr.pend td.m { color:var(--chg); }
 table.can tr.ev td { color:var(--muted); font-style:italic; }
 table.can tr.wake td.dir, table.can tr.wake td.m { color:var(--muted); }
+table.can tr.sent td.dir, table.can tr.sent td.m { color:var(--chg); }
 /* Messages sent during an operation of the page: a coloured bar and a chip naming it. */
 table.can tr.op td:first-child { box-shadow:inset 3px 0 0 var(--opc); }
 table.can tr.op td { background:color-mix(in srgb, var(--opc) 9%, transparent); }
@@ -333,7 +334,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
   <svg class="logo" aria-hidden="true" viewBox="0 0 48 48"><defs><linearGradient id="logoBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient><linearGradient id="logoGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fcd34d"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><rect width="48" height="48" rx="11" fill="url(#logoBg)"/><rect x="1" y="1" width="46" height="46" rx="10" fill="none" stroke="#fff" stroke-opacity=".14"/><g fill="url(#logoGold)"><path d="M20.20 43.20C11.00 42.20 5.60 34.00 8.00 16.50" fill="none" stroke="#f59e0b" stroke-width="1.3" stroke-linecap="round"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(16.09 42.16) rotate(-194.9)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(12.29 39.60) rotate(-173.1)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(12.29 39.60) rotate(-97.1)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(9.49 35.50) rotate(-152.7)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(9.49 35.50) rotate(-76.7)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(7.84 29.80) rotate(-137.0)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(7.84 29.80) rotate(-61.0)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(7.47 22.40) rotate(-125.8)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(7.47 22.40) rotate(-49.8)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(8.00 16.50) rotate(-82.2)"/><path d="M27.80 43.20C37.00 42.20 42.40 34.00 40.00 16.50" fill="none" stroke="#f59e0b" stroke-width="1.3" stroke-linecap="round"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(31.91 42.16) rotate(-61.1)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(35.71 39.60) rotate(-6.9)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(35.71 39.60) rotate(-82.9)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(38.51 35.50) rotate(-27.3)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(38.51 35.50) rotate(-103.3)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(40.16 29.80) rotate(-43.0)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(40.16 29.80) rotate(-119.0)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(40.53 22.40) rotate(-54.2)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(40.53 22.40) rotate(-130.2)"/><path d="M0 0C1.4-1.9 4.6-1.9 6.2 0C4.6 1.9 1.4 1.9 0 0Z" transform="translate(40.00 16.50) rotate(-97.8)"/></g><path d="M24 11L32.4 35H27.6L24 24L20.4 35H15.6Z" fill="#0b1f4d" fill-opacity=".35" transform="translate(0 1)"/><path d="M24 11L32.4 35H27.6L24 24L20.4 35H15.6Z" fill="#fff"/></svg>
   <span class="name">Laertes<small>father of Odis</small></span></span>
   <div class="navtabs">
-  <button title="The control units of the vehicle project: identification, faults, coding, adaptation, measurements, basic settings, output tests, scans" data-tab="units" onclick="showTab('units')">Project units</button><button title="The ODIS database without a car: search a part number or variant and see its tables" data-tab="odx" onclick="showTab('odx')">Unit database</button><button title="Every trouble code of a unit in the ODIS database, with repair guidance" data-tab="dtc" onclick="showTab('dtc')">Trouble codes</button><button title="The coding ↔ trouble code rules: see, edit and add them, and hide wrong computed links" data-tab="rules" onclick="showTab('rules')">Rules</button><button title="MQB feature codings and tweaks: what to code where, with login codes, the central electronics lamp outputs and light functions; open a unit to apply them" data-tab="recipes" onclick="showTab('recipes')">Recipes</button><button title="Which project units and ECU variants have their coding as text (ODIS definition, borrowed, or your .lbl labels) and which are missing" data-tab="coverage" onclick="showTab('coverage')">Coverage</button><button title="Which ODIS project a car needs: decode a VIN, or pick the model and year (from ODIS&#39;s own vehicle tables; ODIS need not run)" data-tab="vehicles" onclick="showTab('vehicles')">Vehicles</button><button title="The large coding editor: bit grid, .lbl labels and the variant&#39;s coding definition" data-tab="coding" onclick="showTab('coding')">Coding</button><button title="Every coding and adaptation write with old → new value; survives restarts" data-tab="history" onclick="showTab('history')">History</button><button title="Retrofit mode: a scan before, then every change to the chosen units kept under the retrofit&#39;s name" data-tab="retrofit" onclick="showTab('retrofit')">Retrofit</button><button title="Component protection: remove it after a unit exchange (online, needs GeKo)" data-tab="cp" onclick="showTab('cp')">CP</button><button title="Immobilizer functions (online, needs GeKo)" data-tab="immo" onclick="showTab('immo')">Immobilizer</button><button title="Special vehicle functions: back up the coding and adaptations of every unit into one file (ODIS 046.01 Coding / Adaptations), then open or download it" data-tab="backups" onclick="showTab('backups')">Backups</button><button id="canTabBtn" title="Show or hide the CAN trace of the virtual VCI, over any tab (also ◀ CAN on the right edge)" onclick="toggleCanPanel()">VCI CAN</button><button title="Laertes options, the ODIS bridge, the clamp 15 wake-up and your sign-ins" data-tab="settings" onclick="showTab('settings')">Settings</button><button title="How to set up and use Laertes: every tab, button and option" data-tab="help" onclick="showTab('help')">Help</button>
+  <button title="The control units of the vehicle project: identification, faults, coding, adaptation, measurements, basic settings, output tests, scans" data-tab="units" onclick="showTab('units')">Project units</button><button title="The ODIS database without a car: search a part number or variant and see its tables" data-tab="odx" onclick="showTab('odx')">Unit database</button><button title="Every trouble code of a unit in the ODIS database, with repair guidance" data-tab="dtc" onclick="showTab('dtc')">Trouble codes</button><button title="The coding ↔ trouble code rules: see, edit and add them, and hide wrong computed links" data-tab="rules" onclick="showTab('rules')">Rules</button><button title="MQB feature codings and tweaks: what to code where, with login codes, the central electronics lamp outputs and light functions; open a unit to apply them" data-tab="recipes" onclick="showTab('recipes')">Recipes</button><button title="Which project units and ECU variants have their coding as text (ODIS definition, borrowed, or your .lbl labels) and which are missing" data-tab="coverage" onclick="showTab('coverage')">Coverage</button><button title="Which ODIS project a car needs: decode a VIN, or pick the model and year (from ODIS&#39;s own vehicle tables; ODIS need not run)" data-tab="vehicles" onclick="showTab('vehicles')">Vehicles</button><button title="The large coding editor: bit grid, .lbl labels and the variant&#39;s coding definition" data-tab="coding" onclick="showTab('coding')">Coding</button><button title="Every coding and adaptation write with old → new value; survives restarts" data-tab="history" onclick="showTab('history')">History</button><button title="Retrofit mode: a scan before, then every change to the chosen units kept under the retrofit&#39;s name" data-tab="retrofit" onclick="showTab('retrofit')">Retrofit</button><button title="Component protection: remove it after a unit exchange (online, needs GeKo)" data-tab="cp" onclick="showTab('cp')">CP</button><button title="Immobilizer functions (online, needs GeKo)" data-tab="immo" onclick="showTab('immo')">Immobilizer</button><button title="Special vehicle functions: back up the coding and adaptations of every unit into one file (ODIS 046.01 Coding / Adaptations), then open or download it" data-tab="backups" onclick="showTab('backups')">Backups</button><button title="Set up your own CAN messages and send them on the bus through the VCI, once or periodically" data-tab="cansend" onclick="showTab('cansend')">CAN send</button><button id="canTabBtn" title="Show or hide the CAN trace of the virtual VCI, over any tab (also ◀ CAN on the right edge)" onclick="toggleCanPanel()">VCI CAN</button><button title="Laertes options, the ODIS bridge, the clamp 15 wake-up and your sign-ins" data-tab="settings" onclick="showTab('settings')">Settings</button><button title="How to set up and use Laertes: every tab, button and option" data-tab="help" onclick="showTab('help')">Help</button>
   </div>
   <div class="navstatus">
   <span class="navleft"><span id="busy" class="busy" hidden><span class="hourglass" aria-hidden="true">⏳</span> <span class="txt"></span><span class="time mono" title="Running for"></span><button onclick="cancelOp()" title="Stop after the current step">Stop</button></span>
@@ -386,6 +387,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
 <div id="cp" class="db units" hidden></div>
 <div id="immo" class="db units" hidden></div>
 <div id="backups" class="db units" hidden></div>
+<div id="cansend" class="db units" hidden></div>
 <div id="settings" class="db help" hidden></div>
 <div id="help" class="db help" hidden>
   <h1>Laertes help</h1>
@@ -406,6 +408,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
     <a href="#" onclick="helpGo('hRetrofit'); return false">Retrofit</a> ·
     <a href="#" onclick="helpGo('hGf'); return false">CP &amp; Immobilizer</a> ·
     <a href="#" onclick="helpGo('hBackups'); return false">Backups</a> ·
+    <a href="#" onclick="helpGo('hCanSend'); return false">CAN send</a> ·
     <a href="#" onclick="helpGo('hCan'); return false">VCI CAN</a> ·
     <a href="#" onclick="helpGo('hSettings'); return false">Settings</a> ·
     <a href="#" onclick="helpGo('hTips'); return false">Tips</a> ·
@@ -473,7 +476,7 @@ button.exp { border-color:var(--chg); color:var(--chg); }
   <h2 class="sub" id="hTop">Top bar</h2>
   <dl>
     <dt>Tabs</dt>
-    <dd>Project units, Unit database, Trouble codes, Vehicles, Coding, History, Retrofit, CP, Immobilizer, Settings and Help. <b>VCI CAN</b>
+    <dd>Project units, Unit database, Trouble codes, Vehicles, Coding, History, Retrofit, CP, Immobilizer, Backups, CAN send, Settings and Help. <b>VCI CAN</b>
       is not a tab: it opens the CAN panel on the right, next to any tab. Laertes remembers the last tab.</dd>
     <dt>⏳ Running operation</dt>
     <dd>The operation in progress and how long it has run. Only one operation runs at a time; others are refused until it ends.
@@ -797,10 +800,24 @@ button.exp { border-color:var(--chg); color:var(--chg); }
       <code>laertes.exe -grpstub=false</code> to use VW's real backend.</dd>
   </dl>
 
+  <h2 class="sub" id="hCanSend">CAN send</h2>
+  <p>Puts your own raw CAN frames on the bus (no ISO-TP, no UDS session): a CAN ID in hex (up to <code>7FF</code> is 11-bit, above
+    is 29-bit up to <code>1FFFFFFF</code>), 0 to 8 data bytes in hex, sent once or every so many milliseconds (10 to 60000), a number of
+    times or until <b>■ Stop</b>. <b>💾 Save to my messages</b> keeps a message in Laertes's database with a name; each one has its own
+    <b>▶ Send</b>, <b>Edit</b> and, for periodic ones, <b>■ Stop</b>. Periodic frames also stop when ODIS closes the VCI.</p>
+  <ul>
+    <li><b>Your own VCI:</b> tick <b>Settings › CAN send on your VCI</b> and start the bridge with <b>▶ Start bridge</b>. ODIS then uses
+      your VCI through Laertes's VCI DLL, which forwards everything and sends your frames on a raw CAN channel next to ODIS's
+      (needs a VCI that ODIS uses as a J2534 device; the clamp 15 wake-up routes it the same way). Frames go out once ODIS has
+      connected to the vehicle. Through a car's OBD port the gateway usually does not pass frames on to the other buses.</li>
+    <li><b>Virtual VCI with the QEMU gateway:</b> frames go to the emulated gateway's CAN bus from Settings.</li>
+    <li><b>Virtual VCI simulating the units:</b> no bus is connected; frames only show in the trace.</li>
+  </ul>
+  <p>Sent frames show in the VCI CAN panel as <b>▶ Laertes</b>.</p>
   <h2 class="sub" id="hCan">VCI CAN panel</h2>
   <p><b>VCI CAN</b> in the tab bar or <b>◀ CAN</b> on the right edge opens the CAN trace next to any tab; drag its left edge to
-    change the width, <b>▶ Hide</b> closes it. It records all the time, also while hidden. Only the virtual VCI (and the clamp 15
-    wake-up frames) is traced; a real VCI is not.</p>
+    change the width, <b>▶ Hide</b> closes it. It records all the time, also while hidden. The virtual VCI is traced; with your own VCI
+    only the clamp 15 wake-up frames and the frames of the CAN send tab (▶ Laertes) are.</p>
   <ul>
     <li>▶ is ODIS → unit, ◀ is unit → ODIS. Each message is decoded — UDS service, identifiers, values and negative responses with
       their meaning; hover a message for details.</li>
@@ -1010,7 +1027,8 @@ function laertesLink() {
 // show what changed. Loaded once at startup; defaults apply until then.
 const settings = {dtcCheck: true, hideDangerous: true, transLang: 'en', autoTranslate: false, autoStartBridge: true, odisProject: '', odisOffline: false, odisVin: '', odisDirectProject: false, odisProduct: 'OE',
   wakeOn: false, wakeId: '3C0', wakeData: '00 00 03 00', wakeE2E: 'C3', wakeMs: 100,
-  qemuOn: false, qemuAddr: '127.0.0.1:23040', qemuBus: 4};
+  qemuOn: false, qemuAddr: '127.0.0.1:23040', qemuBus: 4,
+  canSendOwnVci: false, canMessages: []};
 async function loadSettings() {
   try { Object.assign(settings, await api('GET', '/api/settings')); } catch (e) {}
   try { geko = await api('GET', '/api/geko'); } catch (e) {}
@@ -1731,7 +1749,7 @@ function resultRows(v, rows = [], depth = 0) {
 }
 
 // Each tab shows the element with the id in TABS; the coding view lives in #main.
-const TABS = {coding: 'main', units: 'units', odx: 'odx', dtc: 'dtc', rules: 'rules', recipes: 'recipes', coverage: 'coverage', vehicles: 'vehicles', history: 'history', retrofit: 'retrofit', cp: 'cp', immo: 'immo', backups: 'backups', settings: 'settings', help: 'help'};
+const TABS = {coding: 'main', units: 'units', odx: 'odx', dtc: 'dtc', rules: 'rules', recipes: 'recipes', coverage: 'coverage', vehicles: 'vehicles', history: 'history', retrofit: 'retrofit', cp: 'cp', immo: 'immo', backups: 'backups', cansend: 'cansend', settings: 'settings', help: 'help'};
 let activeTab = 'coding';
 const currentTab = () => activeTab;
 function showTab(tab) {
@@ -1754,6 +1772,7 @@ function showTab(tab) {
   if (tab === 'cp') loadCpTab();
   if (tab === 'immo') loadImmoTab();
   if (tab === 'backups') loadBackupsTab();
+  if (tab === 'cansend') loadCanSendTab();
   if (tab === 'settings') renderSettings();
 }
 
@@ -1887,6 +1906,14 @@ function renderSettings() {
     <label style="align-items:center" title="VW E2E protection: byte 1's low nibble counts 0..15 and byte 0 becomes the CRC-8 (AUTOSAR 0x2F) over the other bytes and this data ID. C3 is Klemmen_Status_01's. Empty sends the data unchanged (older units without E2E).">
       <span>E2E data ID:</span><input type="text" maxlength="2" style="width:50px" value="${esc(settings.wakeE2E)}" oninput="this.value = this.value.toUpperCase()" onchange="settings.wakeE2E = this.value.trim(); saveSettings()">
       <span class="meta">empty: no counter/CRC</span>
+    </label>
+    </section><section class="card"><h2 class="sub">CAN send on your VCI</h2>
+    <label style="align-items:flex-start" title="ODIS then uses your VCI through Laertes's VCI DLL, which forwards everything and puts the frames of the CAN send tab on the bus">
+      <input type="checkbox" ${settings.canSendOwnVci ? 'checked' : ''} onchange="settings.canSendOwnVci = this.checked; saveSettings()">
+      <span>Route your own VCI through Laertes, so the <b>CAN send</b> tab can put frames on the bus.
+        <br><span class="meta">Used by <b>▶ Start bridge</b> (your VCI); takes effect the next time the bridge starts. It needs a VCI that ODIS uses as a J2534 device.
+        The clamp 15 wake-up above routes it the same way, so with the wake-up on this is not needed. The virtual VCI always takes the frames
+        (to the QEMU gateway, or only into the trace when it simulates the units).</span></span>
     </label>
     </section><section class="card"><h2 class="sub">After a write</h2>
     <label style="align-items:flex-start">
@@ -2092,7 +2119,7 @@ function wakeDescribe(id, b) {
 const VCI_EVENT = {OPEN: 'PassThruOpen: ODIS opened the VCI', CONN: 'PassThruConnect: ODIS opened a channel (proto 5 = CAN, 6 = ISO15765; baud in hex, 7A120 = 500 kbit/s)',
   FILT: 'PassThruStartMsgFilter: channel, filter type (1 pass, 2 block, 3 flow control), mask, pattern, flow-control ID',
   IOCTL: 'PassThruIoctl: channel and ioctl ID (3 = READ_VBATT battery voltage, 800E = VW vendor specific)',
-  WAKE: 'The clamp 15 wake-up (Settings › Clamp 15 wake-up)'};
+  WAKE: 'The clamp 15 wake-up (Settings › Clamp 15 wake-up)', SEND: 'The CAN send tab: frames Laertes put on the bus'};
 // The CAN trace panel: docked on the right next to any tab (the page narrows), so the traffic of
 // whatever runs is visible; ◀ CAN on the right edge (or VCI CAN in the tab bar) opens it, ▶ Hide
 // closes it. It polls only while open. Open state and width are remembered in this browser.
@@ -2126,7 +2153,7 @@ function loadVciTab() {
   $('#vci').innerHTML = `<div class="drag" onmousedown="canResize(event)" title="Drag to change the width"></div>
     <div class="head"><b>VCI CAN</b><span class="meta grow">▶ ODIS → unit · ◀ unit → ODIS · hover a message for its meaning</span>
       <button onclick="toggleCanPanel(false)" title="Hide the panel; the page takes the full width again (◀ CAN on the right edge brings it back; recording continues)">▶ Hide</button></div>
-    <div class="meta">Recorded all the time, also while hidden. Only the virtual VCI is traced; a real VCI is not.</div>
+    <div class="meta">Recorded all the time, also while hidden. The virtual VCI is traced; with your own VCI only the wake-up and the frames of the <a href="#" onclick="showTab('cansend'); return false">CAN send</a> tab are.</div>
     <div class="bar"><button title="Stop updating the table (recording continues in the background)" id="vciPauseBtn" onclick="toggleVciPause()">⏸ Pause</button><button title="Empty the CAN trace file" onclick="clearVci()">Clear</button>
       <input title="Show only messages containing this text (CAN ID, service, DID, meaning)" id="vciFilter" type="search" placeholder="Filter: CAN ID, service, DID…" value="${esc(keptFilter('vciFilter'))}" oninput="keepFilter('vciFilter', this.value); pollVci(true)" style="width:220px">
       <label><input type="checkbox" id="vciEvents" onchange="pollVci(true)"> Setup events (connect, filters, ioctls)</label>
@@ -2174,8 +2201,15 @@ async function pollVci(force) {
       return `<tr class="wake" title="${esc(['Laertes → bus · CAN ID 0x' + id, ...u.details].join('\n'))}"><td>${t}</td><td class="dir">▶ wake</td><td>${esc(id)}</td><td>raw</td>`
         + `<td class="d">${hexBytes(b)}</td><td class="m">${esc(u.short)}</td></tr>`;
     }
+    if (kind === 'S' || kind === 'Q') { // Laertes's own frames (CAN send tab), raw on the bus
+      const id = p[3] || '', b = ((p[4] || '').match(/../g) || []).map(x => parseInt(x, 16));
+      const tip = [`Laertes → bus (CAN send tab)${kind === 'Q' ? ', periodic' : ''} · CAN ID 0x${id}${parseInt(id, 16) > 0x7FF ? ' (29-bit)' : ''} · ${b.length} bytes`];
+      if (filter && !(t + ' ' + id + ' ' + hexBytes(b) + ' laertes send').toLowerCase().includes(filter)) return '';
+      return `<tr class="sent" title="${esc(tip.join('\n'))}"><td>${t}</td><td class="dir">▶ Laertes</td><td>${esc(id)}</td><td>raw</td>`
+        + `<td class="d">${hexBytes(b)}</td><td class="m">${kind === 'Q' ? 'periodic frame' : 'sent frame'}</td></tr>`;
+    }
     if (kind !== 'R' && kind !== 'T' && kind !== 'P') {
-      if (!events && kind !== 'WAKE') return '';
+      if (!events && kind !== 'WAKE' && kind !== 'SEND') return '';
       const text = p.slice(1).join(' ');
       if (filter && !text.toLowerCase().includes(filter)) return '';
       return `<tr class="ev" title="${esc(VCI_EVENT[kind] || '')}"><td>${t}</td><td colspan="6">${esc(text)}</td></tr>`;
@@ -2215,7 +2249,7 @@ async function pollVci(force) {
     return `<tr class="${cls}${o ? ' op op-' + o.cat : ''}${hl ? ' canhl' : ''}" title="${esc(tip.join('\n'))}"><td>${t}</td><td class="dir">${dir}</td><td>${esc(id)}</td><td>${esc(f.type)}</td>`
       + `<td class="d">${hexBytes(f.uds)}</td><td class="m">${o ? `<span class="opchip">${esc(o.tag)}</span>` : ''}${esc(u.short)}</td></tr>`;
   }).join('');
-  const html = msgs || events || wakes ? `<table class="can"><thead><tr><th>time (s)</th><th></th><th>CAN ID</th><th>ISO-TP</th><th>data</th><th>meaning</th></tr></thead><tbody>${body}</tbody></table>`
+  const html = msgs || events || wakes || body ? `<table class="can"><thead><tr><th>time (s)</th><th></th><th>CAN ID</th><th>ISO-TP</th><th>data</th><th>meaning</th></tr></thead><tbody>${body}</tbody></table>`
     : '<div class="empty">No CAN messages yet. Start the bridge with the virtual VCI (▶ Bridge + virtual VCI) to see ODIS talk to the simulated units.</div>';
   if (html !== vciShown) { rows.innerHTML = html; vciShown = html; }
   $('#vciInfo').textContent = filter ? `${shown} of ${msgs} messages` : msgs + ' messages';
@@ -9335,6 +9369,147 @@ function backupsHTML() {
   return `<div class="meta">In ${esc(backups.dir)}</div><table class="unitlist"><thead><tr><th>File</th><th>Saved</th><th>Size</th><th></th></tr></thead><tbody>${backups.backups.map(b =>
     `<tr><td class="mono">${esc(b.name)}</td><td>${esc(new Date(b.time).toLocaleString())}</td><td>${Math.round(b.size / 1024)} kB</td>
       <td>${backupFileButtons(b.name, b.html)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+// CAN send tab: the user's own CAN messages (settings.canMessages, kept in laertes.db), sent through
+// Laertes's VCI DLL (offlinevci.c "CAN send"): on the bus with the user's VCI, to the QEMU gateway,
+// or only into the trace while the virtual VCI simulates the units. A message is sent once, or every
+// ms milliseconds count times (0: until stopped). canDraft is the form, canRunning the periodic
+// messages started from this page (CAN ID -> end time, Infinity until stopped).
+let canDraft = {name: '', id: '', data: '', ms: 0, count: 0}, canEditing = -1, canVci = '';
+const canRunning = {};
+async function loadCanSendTab() {
+  try { canVci = (await api('GET', '/api/odis')).vci || ''; } catch (e) { canVci = ''; }
+  renderCanSendTab();
+}
+// canFrameCheck checks a message as the server does (offlinevci.go canSendLine), for the form's hints.
+function canFrameCheck(m) {
+  const id = String(m.id || '').trim().replace(/^0x/i, ''), data = String(m.data || '').replace(/[\s,:-]/g, '');
+  if (!/^[0-9a-f]{1,8}$/i.test(id) || parseInt(id, 16) > 0x1FFFFFFF) return {err: 'CAN ID: hex, up to 1FFFFFFF'};
+  if (!/^([0-9a-f]{2}){0,8}$/i.test(data)) return {err: 'Data: 0 to 8 bytes in hex'};
+  const ms = Number(m.ms) || 0;
+  if (ms && (ms < 10 || ms > 60000)) return {err: 'Interval: 10 to 60000 ms (0 sends once)'};
+  const n = parseInt(id, 16);
+  return {id: n.toString(16).toUpperCase(), ext: n > 0x7FF, bytes: data.length / 2, data: hexBytes((data.match(/../g) || []).map(x => parseInt(x, 16)))};
+}
+function canRepeatText(m) {
+  const ms = Number(m.ms) || 0, n = Number(m.count) || 0;
+  return !ms ? 'once' : `every ${ms} ms${n ? `, ${n}×` : ', until stopped'}`;
+}
+function canIsRunning(id) {
+  const end = canRunning[id];
+  if (end === undefined) return false;
+  if (end !== Infinity && Date.now() > end) { delete canRunning[id]; return false; }
+  return true;
+}
+function canVciNote() {
+  const v = canVci;
+  if (/via Laertes/.test(v)) return `Frames go on the bus through your VCI (<b>${esc(v)}</b>), next to ODIS's traffic.`;
+  if (/QEMU/.test(v)) return `Frames go to the emulated gateway (<b>${esc(v)}</b>).`;
+  if (/Laertes virtual VCI/.test(v)) return `ODIS uses the virtual VCI that simulates the units: frames only show in the VCI CAN trace, no bus is connected.`;
+  return `<span class="warnbox" style="display:block">ODIS does not use Laertes's VCI${v ? ` (it uses <b>${esc(v)}</b>)` : ''}, so frames cannot be sent.
+    For your own VCI tick <b>Settings › CAN send on your VCI</b> and start the bridge again (<b>▶ Start bridge</b>); or start the virtual VCI.</span>`;
+}
+function renderCanSendTab() {
+  const el = $('#cansend'); if (!el) return;
+  const d = canDraft, chk = canFrameCheck(d);
+  const msgs = settings.canMessages || [];
+  const anyRunning = Object.keys(canRunning).some(canIsRunning);
+  el.innerHTML = `<h2 class="sub">CAN send</h2>
+    <p class="meta">Put your own CAN frames on the bus: raw frames (no ISO-TP, no UDS session), once or periodically. ${canVciNote()}
+      <button onclick="toggleCanPanel(true)" title="Open the VCI CAN trace next to this tab: sent frames show as ▶ Laertes">Show the CAN trace</button>
+      <button onclick="loadCanSendTab()" title="Check again which VCI ODIS uses">Reload</button></p>
+    <div class="warnbox">Frames on a car's bus act on the units at once (lights, locks, steering, brakes…). Send only what you know; a periodic frame keeps
+      going until it is stopped, its count is reached or ODIS closes the VCI.</div>
+    <h2 class="sub">${canEditing >= 0 ? 'Edit message' : 'Message'}</h2>
+    <table class="vals" style="max-width:720px">
+      <tr><td>Name</td><td><input id="canName" type="text" maxlength="60" style="width:100%" placeholder="e.g. Clamp 15 on, Wipers once (optional)" value="${esc(d.name)}" oninput="canDraft.name = this.value"></td></tr>
+      <tr><td>CAN ID (hex)</td><td><input id="canId" type="text" maxlength="10" style="width:120px; font-family:Consolas, monospace" placeholder="3C0" value="${esc(d.id)}"
+        oninput="canDraft.id = this.value.toUpperCase(); canFormHint()" onkeydown="if (event.key === 'Enter') canSendDraft()">
+        <span class="meta" id="canIdHint"></span></td></tr>
+      <tr><td>Data (hex)</td><td><input id="canData" type="text" maxlength="40" style="width:260px; font-family:Consolas, monospace" placeholder="00 00 03 00" value="${esc(d.data)}"
+        oninput="canDraft.data = this.value.toUpperCase(); canFormHint()" onkeydown="if (event.key === 'Enter') canSendDraft()">
+        <span class="meta" id="canDataHint"></span></td></tr>
+      <tr><td>Repeat</td><td><label style="display:inline-flex; gap:6px; align-items:center">every <input type="number" min="0" max="60000" step="10" style="width:90px" value="${esc(d.ms || 0)}" oninput="canDraft.ms = Number(this.value) || 0; canFormHint()"> ms</label>
+        <label style="display:inline-flex; gap:6px; align-items:center; margin-left:12px">times <input type="number" min="0" max="1000000" style="width:90px" value="${esc(d.count || 0)}" oninput="canDraft.count = Number(this.value) || 0; canFormHint()"></label>
+        <span class="meta">0 ms sends once; 0 times repeats until stopped</span></td></tr>
+    </table>
+    <div class="bar"><button class="primary" onclick="canSendDraft()" title="Send this frame now (Enter in the ID or data field)">▶ Send</button>
+      <button onclick="canSaveDraft()" title="${canEditing >= 0 ? 'Save the changes to this message' : 'Keep this message in the list below'}">${canEditing >= 0 ? '💾 Save changes' : '💾 Save to my messages'}</button>
+      ${canEditing >= 0 ? '<button onclick="canEditCancel()">Cancel editing</button>' : ''}
+      <button onclick="canStop()" title="Stop every periodic frame (also those started before this page was opened)"${anyRunning ? ' class="primary"' : ''}>■ Stop all periodic</button>
+      <span class="meta" id="canFormErr" style="color:var(--warn)"></span></div>
+    <h2 class="sub">My messages</h2>
+    ${msgs.length ? `<table class="unitlist"><thead><tr><th>Name</th><th>CAN ID</th><th>Data</th><th>Repeat</th><th></th></tr></thead><tbody>${msgs.map((m, i) => {
+      const c = canFrameCheck(m), run = !c.err && canIsRunning(c.id);
+      return `<tr${canEditing === i ? ' style="background:color-mix(in srgb, var(--accent) 10%, transparent)"' : ''}><td>${esc(m.name || '')}</td>
+        <td class="mono">${esc(c.id || m.id)}${c.ext ? ' <span class="meta">29-bit</span>' : ''}</td><td class="mono">${esc(c.data || m.data || '–')}</td>
+        <td>${esc(canRepeatText(m))}${run ? ' <b style="color:var(--on)">● running</b>' : ''}</td>
+        <td style="white-space:nowrap"><button class="primary" onclick="canSendSaved(${i})" title="Send this message now">▶ Send</button>
+          ${Number(m.ms) ? `<button onclick="canStop(${i})" title="Stop this periodic frame">■ Stop</button>` : ''}
+          <button onclick="canEdit(${i})" title="Load into the form above to change it">Edit</button>
+          <button onclick="canMove(${i}, -1)" ${i ? '' : 'disabled'} title="Move up">↑</button>
+          <button onclick="canMove(${i}, 1)" ${i < msgs.length - 1 ? '' : 'disabled'} title="Move down">↓</button>
+          <button onclick="canDelete(${i})" title="Delete this message">✕</button></td></tr>`;
+    }).join('')}</tbody></table>`
+    : '<p class="meta">No messages yet: fill in the form and press <b>💾 Save to my messages</b>. They are kept in Laertes\'s database.</p>'}`;
+  canFormHint();
+}
+function canFormHint() {
+  const c = canFrameCheck(canDraft), id = $('#canIdHint'), data = $('#canDataHint'), err = $('#canFormErr');
+  if (!id) return;
+  id.textContent = c.err || !canDraft.id ? '' : (c.ext ? '29-bit (extended)' : '11-bit (standard)');
+  data.textContent = c.err || canDraft.data === '' ? (canDraft.data === '' ? 'no data bytes (DLC 0)' : '') : `${c.bytes} byte${c.bytes === 1 ? '' : 's'} (DLC ${c.bytes})`;
+  err.textContent = canDraft.id || canDraft.data ? c.err || '' : '';
+}
+async function canSend(m) {
+  const c = canFrameCheck(m);
+  if (c.err) { toast(c.err, true); return; }
+  const ms = Number(m.ms) || 0, count = Number(m.count) || 0;
+  try {
+    await api('POST', '/api/vci/can/send', {id: c.id, data: c.data, ms, count});
+    if (ms) canRunning[c.id] = count ? Date.now() + ms * count : Infinity;
+    logActivity('ok', `CAN send: ${c.id} ${c.data || '(no data)'}${ms ? ' ' + canRepeatText(m) : ''}`).ms = 0; // marks the frame in the trace
+    toast(`Sent ${c.id}#${c.data.replace(/ /g, '') || '–'}${ms ? ' · ' + canRepeatText(m) : ''}`);
+    renderCanSendTab();
+  } catch (e) { toast('CAN send: ' + e.message, true); }
+}
+function canSendDraft() { canSend(canDraft); }
+function canSendSaved(i) { canSend(settings.canMessages[i]); }
+async function canStop(i) {
+  const m = i === undefined ? null : settings.canMessages[i], c = m ? canFrameCheck(m) : {};
+  try {
+    await api('POST', '/api/vci/can/stop', m ? {id: c.id} : {});
+    if (m) delete canRunning[c.id]; else for (const k in canRunning) delete canRunning[k];
+    toast(m ? `Stopped ${c.id}` : 'Stopped every periodic frame');
+    renderCanSendTab();
+  } catch (e) { toast('CAN stop: ' + e.message, true); }
+}
+function canSaveDraft() {
+  const c = canFrameCheck(canDraft);
+  if (c.err) { toast(c.err, true); return; }
+  const m = {name: canDraft.name.trim(), id: c.id, data: c.data, ms: Number(canDraft.ms) || 0, count: Number(canDraft.count) || 0};
+  settings.canMessages = settings.canMessages || [];
+  if (canEditing >= 0) settings.canMessages[canEditing] = m; else settings.canMessages.push(m);
+  canEditing = -1;
+  saveSettings();
+  renderCanSendTab();
+}
+function canEdit(i) { canEditing = i; canDraft = {...settings.canMessages[i]}; renderCanSendTab(); $('#canId').focus(); }
+function canEditCancel() { canEditing = -1; renderCanSendTab(); }
+function canMove(i, by) {
+  const l = settings.canMessages, j = i + by;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  if (canEditing === i) canEditing = j; else if (canEditing === j) canEditing = i;
+  saveSettings(); renderCanSendTab();
+}
+function canDelete(i) {
+  const m = settings.canMessages[i];
+  if (!confirm(`Delete the message ${m.name || m.id}?`)) return;
+  settings.canMessages.splice(i, 1);
+  if (canEditing === i) canEditing = -1; else if (canEditing > i) canEditing--;
+  saveSettings(); renderCanSendTab();
 }
 function backupOutHTML(r) {
   let h = `<div class="status ${r.error ? 'err' : ''}">${esc(r.phase || r.status)}${typeof r.percent === 'number' ? ' · ' + r.percent + '%' : ''}${r.message ? ' — ' + esc(r.message) : ''}</div>`;

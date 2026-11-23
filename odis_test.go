@@ -122,3 +122,25 @@ func TestStartTimer(t *testing.T) {
 		t.Errorf("after the start: %+v", st)
 	}
 }
+
+func TestCanSendLine(t *testing.T) {
+	for _, c := range []struct {
+		f    canFrame
+		want string
+	}{
+		{canFrame{ID: "3c0", Data: "00 00 03 00"}, "3C0 00000300"},
+		{canFrame{ID: "0x710", Data: "02 10 03", Ms: 100, Count: 5}, "710 021003 100 5"},
+		{canFrame{ID: "17FC0076", Data: ""}, "17FC0076 -"},
+	} {
+		if got, err := canSendLine(c.f); err != nil || got != c.want {
+			t.Errorf("canSendLine(%+v) = %q, %v; want %q", c.f, got, err, c.want)
+		}
+	}
+	for _, f := range []canFrame{{ID: ""}, {ID: "20000000"}, {ID: "7G0"}, {ID: "100", Data: "123"},
+		{ID: "100", Data: "00 11 22 33 44 55 66 77 88"}, {ID: "100", Ms: 5}, {ID: "100", Ms: 100, Count: -1},
+		{ID: "100", Data: "00\nSTOP"}} {
+		if got, err := canSendLine(f); err == nil {
+			t.Errorf("canSendLine(%+v) = %q, want an error", f, got)
+		}
+	}
+}
